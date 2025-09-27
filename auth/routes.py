@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from utils.decorator import DecoratorUtils
 
-from models.auth_schemas import (
+from auth.auth_schemas import (
     UserCreate, UserResponse, TokenResponse,
     OTPRequest, OTPVerify, MessageResponse
 )

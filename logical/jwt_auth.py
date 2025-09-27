@@ -8,7 +8,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import config
-from models.auth_models import TokenData
+from auth.auth_models import TokenData
 from models.enums import HTTPStatus
 
 # JWT configuration

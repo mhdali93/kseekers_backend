@@ -2,49 +2,49 @@ import traceback
 import threading
 import queue
 import logging
-import sqlite3
+import pymysql
 import os
-from urllib.parse import quote_plus
-
-from sqlmodel import create_engine, Session
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.exc import InvalidRequestError
+from contextlib import contextmanager
 import config
 
-class SQLiteConnectionPool:
+class MySQLConnectionPool:
     """
-    A custom SQLite connection pool implementation.
+    A custom MySQL connection pool implementation.
     
     This pool creates and maintains a specified number of database connections
     that can be reused across multiple operations, improving performance.
     """
     
-    def __init__(self, db_file, max_connections=5):
+    def __init__(self, host, port, user, password, database, max_connections=5):
         """Initialize the connection pool."""
-        self.db_file = db_file
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
         self.max_connections = max_connections
         self.pool = queue.Queue(maxsize=max_connections)
         self.size = 0
         self.lock = threading.Lock()
         
-        # Ensure the database directory exists
-        db_dir = os.path.dirname(db_file)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-            
         # Pre-populate the pool with connections
         for _ in range(max_connections):
             self._add_connection()
         
-        logging.info(f"SQLite connection pool initialized with {max_connections} connections to {db_file}")
+        logging.info(f"MySQL connection pool initialized with {max_connections} connections to {host}:{port}/{database}")
     
     def _add_connection(self):
         """Add a new connection to the pool."""
-        conn = sqlite3.connect(self.db_file)
-        # Enable foreign keys
-        conn.execute("PRAGMA foreign_keys = ON")
-        # Configure connection to return rows as dictionaries
-        conn.row_factory = sqlite3.Row
+        conn = pymysql.connect(
+            host=self.host,
+            port=self.port,
+            user=self.user,
+            password=self.password,
+            database=self.database,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False
+        )
         self.size += 1
         self.pool.put(conn)
     
@@ -78,11 +78,9 @@ class SQLiteConnectionPool:
 
 class DBManager:
     """
-    Singleton database manager that provides SQLModel engine for ORM operations
-    while using SQLite now and supporting MySQL in the future.
+    Singleton database manager that provides MySQL connection pool for core SQL operations.
     """
     _instance = None
-    __engine__ = None
     __connection_pool__ = None
     
     def __new__(cls):
@@ -109,48 +107,19 @@ class DBManager:
                     DBManager._instance = DBManager()
 
         return DBManager._instance
-
-    def get_engine(self):
-        """Get SQLAlchemy engine for ORM operations"""
-        if self.__engine__ is None:
-            logging.info("DBEngine is None, creating new engine")
-
-            try:
-                with threading.Lock() as dbmLock:
-                    if self.__engine__ is None:
-                        logging.info('Creating DBEngine')
-                        
-                        # Use SQLite connection string
-                        db_path = os.path.abspath(config.sqlite_db_path)
-                        conn_string = f"sqlite:///{db_path}"
-                        
-                        logging.info(f"DB connection string: {conn_string}")
-                        
-                        # Create the engine with connection pooling
-                        self.__engine__ = create_engine(
-                            conn_string,
-                            # SQLite-specific connection parameters
-                            connect_args={"check_same_thread": False},
-                            # Use StaticPool for in-memory SQLite
-                            poolclass=StaticPool if db_path == ':memory:' else None,
-                            # Echo SQL statements in debug mode
-                            echo=config.db_echo
-                        )
-
-            except Exception as dex:
-                logging.error(f"Error while creating DBEngine: {dex}")
-                raise dex
-
-        return self.__engine__
         
     def get_connection_pool(self):
-        """Get or create the raw SQLite connection pool for direct SQL operations"""
+        """Get or create the MySQL connection pool for direct SQL operations"""
         if self.__connection_pool__ is None:
             with threading.Lock() as dbmLock:
                 if self.__connection_pool__ is None:
-                    logging.info('Creating connection pool')
-                    self.__connection_pool__ = SQLiteConnectionPool(
-                        config.sqlite_db_path,
+                    logging.info('Creating MySQL connection pool')
+                    self.__connection_pool__ = MySQLConnectionPool(
+                        host=config.db_host,
+                        port=int(config.db_port),
+                        user=config.db_user,
+                        password=config.db_password,
+                        database=config.mp_database,
                         max_connections=config.db_conn_pool
                     )
         return self.__connection_pool__
@@ -196,29 +165,84 @@ class DBManager:
         finally:
             if conn:
                 self.get_connection_pool().release_connection(conn)
-
-
-class DBSessionManager:
-    """
-    Context manager for SQLModel session management.
-    Allows for easy transaction handling with the 'with' statement.
-    """
-    def __init__(self):
-        self.__session = None
-  
-    def __enter__(self) -> Session:
+    
+    def execute_insert(self, query, params=None):
+        """Execute an INSERT query and return the last inserted ID"""
+        conn = None
         try:
-            self.__session = Session(DBManager.get_instance().get_engine())
-            return self.__session
-        except Exception as ex:
-            logging.error(f"Error in DBSessionManager: {ex}")
-            raise
-  
-    def __exit__(self, ex_type, ex_mesg, ex_tb):
-        logging.info(f"Exiting DBSessionManager - ex_type: {ex_type}")
-        if ex_type:
-            logging.error(f"Exception in DBSessionManager: {ex_mesg}")
-            self.__session.rollback()
-            traceback.print_tb(ex_tb)
-        
-        self.__session.close()
+            conn = self.get_connection_pool().get_connection()
+            cursor = conn.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logging.error(f"Error executing insert: {e}")
+            raise e
+        finally:
+            if conn:
+                self.get_connection_pool().release_connection(conn)
+    
+    def execute_many(self, query, params_list):
+        """Execute a query multiple times with different parameters"""
+        conn = None
+        try:
+            conn = self.get_connection_pool().get_connection()
+            cursor = conn.cursor()
+            cursor.executemany(query, params_list)
+            conn.commit()
+            return cursor.rowcount
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logging.error(f"Error executing many: {e}")
+            raise e
+        finally:
+            if conn:
+                self.get_connection_pool().release_connection(conn)
+
+
+@contextmanager
+def get_db_connection():
+    """
+    Context manager for database connections.
+    Provides automatic connection management and error handling.
+    """
+    conn = None
+    try:
+        conn = DBManager.get_instance().get_connection_pool().get_connection()
+        yield conn
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logging.error(f"Error in database connection: {e}")
+        raise
+    finally:
+        if conn:
+            DBManager.get_instance().get_connection_pool().release_connection(conn)
+
+
+@contextmanager
+def get_db_transaction():
+    """
+    Context manager for database transactions.
+    Provides automatic transaction management with rollback on error.
+    """
+    conn = None
+    try:
+        conn = DBManager.get_instance().get_connection_pool().get_connection()
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logging.error(f"Error in database transaction: {e}")
+        raise
+    finally:
+        if conn:
+            DBManager.get_instance().get_connection_pool().release_connection(conn)

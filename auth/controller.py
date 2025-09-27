@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 
-from models.auth_models import User
+from auth.auth_models import User
 from auth.dao import UserDAO, OTPDAO
 from logical.jwt_auth import JWTHandler
 

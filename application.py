@@ -21,11 +21,12 @@ if not os.path.exists(log_dir):
 from routes.healthcheck_routes import HealthCheckRoutes
 from look_up.routes import LookUpRoutes
 from auth.routes import AuthRoutes
+from display_config.routes import DisplayConfigRoutes
 
 app = FastAPI(
-    title="ccmg-client-app",
+    title="kseekers",
     version="0.0.1",
-    description="CCMG Client Application",
+    description="Knack Seekers",
 )
 
 # Create a root logger
@@ -60,8 +61,9 @@ app.add_middleware(
 )
 
 app.include_router(HealthCheckRoutes().app, tags=["HEALTH CHECK"])
-app.include_router(LookUpRoutes().app, tags=['Look Up'])
+app.include_router(LookUpRoutes().app)
 app.include_router(AuthRoutes().app)
+app.include_router(DisplayConfigRoutes().app)
 
 
 if __name__ == "__main__":
