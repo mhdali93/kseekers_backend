@@ -2,7 +2,8 @@ import traceback
 import threading
 import queue
 import logging
-import pymysql
+import mysql.connector
+from mysql.connector import Error
 import os
 from contextlib import contextmanager
 import config
@@ -35,14 +36,13 @@ class MySQLConnectionPool:
     
     def _add_connection(self):
         """Add a new connection to the pool."""
-        conn = pymysql.connect(
+        conn = mysql.connector.connect(
             host=self.host,
             port=self.port,
             user=self.user,
             password=self.password,
             database=self.database,
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor,
             autocommit=False
         )
         self.size += 1
@@ -129,7 +129,7 @@ class DBManager:
         conn = None
         try:
             conn = self.get_connection_pool().get_connection()
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
             if params:
                 cursor.execute(query, params)
             else:

@@ -129,7 +129,7 @@ def close_all(self)
 ```
 
 **Connection Configuration**:
-- Uses `pymysql.cursors.DictCursor` for dictionary-like results
+- Uses `mysql.connector` with `dictionary=True` cursor for dictionary-like results
 - `autocommit=False` for transaction control
 - `charset='utf8mb4'` for Unicode support
 - Thread-safe with `queue.Queue` and `threading.Lock`

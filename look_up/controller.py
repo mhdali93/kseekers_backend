@@ -8,25 +8,6 @@ class LookUpController:
     def __init__(self):
         self.dao = LookUpDao()
 
-    def get_headers_info(self, header_type):
-        try:
-            headers = self.dao.look_up(header_type)
-            logging.info(f"Lookup Headers: {headers}")
-            if headers:
-                headers = jsonable_encoder(headers)
-                logging.info(f'Got Headers length {len(headers)}')
-                response = headers
-
-            else:
-                response = None
-
-            return response
-
-        except Exception as e:
-            logging.error("Inside Exception Block get_headers_info")
-            traceback.print_tb(e.__traceback__)
-            raise e
-    
     def get_lookup_types(self):
         """Get all lookup types"""
         try:
@@ -35,82 +16,88 @@ class LookUpController:
             logging.error(f"Error in get_lookup_types: {e}")
             raise e
     
-    def get_lookup_values_by_type_name(self, type_name):
+    def get_lookup_values_by_type(self, type_name):
         """Get lookup values by type name"""
         try:
+            if not type_name or len(type_name.strip()) < 1:
+                raise ValueError("Type name is required")
             return self.dao.get_lookup_values_by_type_name(type_name)
         except Exception as e:
-            logging.error(f"Error in get_lookup_values_by_type_name: {e}")
+            logging.error(f"Error in get_lookup_values_by_type: {e}")
             raise e
     
-    def get_lookup_values_by_type_id(self, type_id):
-        """Get lookup values by type ID"""
+    def manage_lookup_type(self, type_data):
+        """Create or update lookup type (upsert by name)"""
         try:
-            return self.dao.get_lookup_values_by_type_id(type_id)
+            if not type_data.get('name') or len(type_data['name'].strip()) < 1:
+                raise ValueError("Type name is required")
+            
+            # Check if type exists
+            existing_type = self.dao.get_lookup_type_by_name(type_data['name'])
+            
+            if existing_type:
+                # Update existing type
+                return self.dao.update_lookup_type(
+                    existing_type.id, 
+                    type_data['name'], 
+                    type_data.get('description')
+                )
+            else:
+                # Create new type
+                return self.dao.create_lookup_type(
+                    type_data['name'], 
+                    type_data.get('description')
+                )
         except Exception as e:
-            logging.error(f"Error in get_lookup_values_by_type_id: {e}")
+            logging.error(f"Error in manage_lookup_type: {e}")
             raise e
     
-    def get_lookup_type_by_name(self, name):
-        """Get lookup type by name"""
+    def manage_lookup_values(self, type_name, values):
+        """Create or update lookup values for a type (upsert by code)"""
         try:
-            return self.dao.get_lookup_type_by_name(name)
+            if not type_name or len(type_name.strip()) < 1:
+                raise ValueError("Type name is required")
+            
+            if not values:
+                raise ValueError("Values list cannot be empty")
+            
+            # Get or create the lookup type
+            lookup_type = self.dao.get_lookup_type_by_name(type_name)
+            if not lookup_type:
+                raise ValueError(f"Lookup type '{type_name}' not found")
+            
+            # Get existing values for this type
+            existing_values = self.dao.get_lookup_values_by_type_name(type_name)
+            existing_codes = {value.code for value in existing_values}
+            
+            # Process each value in the request
+            new_codes = set()
+            for value in values:
+                code = value['code']
+                new_codes.add(code)
+                
+                if code in existing_codes:
+                    # Update existing value
+                    self.dao.update_lookup_value_by_type_and_code(
+                        lookup_type.id, code, value
+                    )
+                else:
+                    # Create new value
+                    self.dao.create_lookup_value(
+                        lookup_type.id,
+                        value['code'],
+                        value['value'],
+                        value.get('description'),
+                        value.get('is_active', True),
+                        value.get('sort_order', 0)
+                    )
+            
+            # Remove values that are no longer in the request
+            codes_to_remove = existing_codes - new_codes
+            for code in codes_to_remove:
+                self.dao.delete_lookup_value_by_type_and_code(lookup_type.id, code)
+            
+            return True
         except Exception as e:
-            logging.error(f"Error in get_lookup_type_by_name: {e}")
-            raise e
-    
-    def get_lookup_value_by_id(self, value_id):
-        """Get lookup value by ID"""
-        try:
-            return self.dao.get_lookup_value_by_id(value_id)
-        except Exception as e:
-            logging.error(f"Error in get_lookup_value_by_id: {e}")
-            raise e
-    
-    def create_lookup_type(self, name, description=None):
-        """Create a new lookup type"""
-        try:
-            return self.dao.create_lookup_type(name, description)
-        except Exception as e:
-            logging.error(f"Error in create_lookup_type: {e}")
-            raise e
-    
-    def create_lookup_value(self, lookup_type_id, code, value, description=None, is_active=True, sort_order=0):
-        """Create a new lookup value"""
-        try:
-            return self.dao.create_lookup_value(lookup_type_id, code, value, description, is_active, sort_order)
-        except Exception as e:
-            logging.error(f"Error in create_lookup_value: {e}")
-            raise e
-    
-    def update_lookup_type(self, type_id, name=None, description=None):
-        """Update lookup type"""
-        try:
-            return self.dao.update_lookup_type(type_id, name, description)
-        except Exception as e:
-            logging.error(f"Error in update_lookup_type: {e}")
-            raise e
-    
-    def update_lookup_value(self, value_id, code=None, value=None, description=None, is_active=None, sort_order=None):
-        """Update lookup value"""
-        try:
-            return self.dao.update_lookup_value(value_id, code, value, description, is_active, sort_order)
-        except Exception as e:
-            logging.error(f"Error in update_lookup_value: {e}")
-            raise e
-    
-    def delete_lookup_type(self, type_id):
-        """Delete lookup type"""
-        try:
-            return self.dao.delete_lookup_type(type_id)
-        except Exception as e:
-            logging.error(f"Error in delete_lookup_type: {e}")
-            raise e
-    
-    def delete_lookup_value(self, value_id):
-        """Delete lookup value"""
-        try:
-            return self.dao.delete_lookup_value(value_id)
-        except Exception as e:
-            logging.error(f"Error in delete_lookup_value: {e}")
+            logging.error(f"Error in manage_lookup_values: {e}")
             raise e

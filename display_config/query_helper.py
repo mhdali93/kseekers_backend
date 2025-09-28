@@ -79,6 +79,20 @@ class DisplayConfigQueryHelper:
     
     # Grid Metadata Queries
     @staticmethod
+    def get_grid_metadata_list_query(name=None, is_active=None):
+        """Get SQL query for grid metadata list with optional filters"""
+        query = "SELECT * FROM grid_metadata WHERE 1=1"
+        params = []
+        
+        if name:
+            query += " AND gridName LIKE %s"
+        if is_active is not None:
+            query += " AND is_active = %s"
+        
+        query += " ORDER BY gridName"
+        return query
+    
+    @staticmethod
     def get_all_grid_metadata_query():
         """Get SQL query for all grid metadata"""
         return "SELECT * FROM grid_metadata WHERE is_active = 1 ORDER BY gridName"
@@ -114,3 +128,19 @@ class DisplayConfigQueryHelper:
     def delete_grid_metadata_query():
         """Get SQL query to delete grid metadata"""
         return "DELETE FROM grid_metadata WHERE id = %s"
+    
+    @staticmethod
+    def update_display_config_by_grid_and_display_id_query():
+        """Get SQL query to update display config by gridNameId and displayId"""
+        return """
+            UPDATE result_display_config 
+            SET title = %s, hidden = %s, width = %s, sortIndex = %s, 
+                ellipsis = %s, align = %s, dbDataType = %s, 
+                codeDataType = %s, format = %s
+            WHERE gridNameId = %s AND displayId = %s
+        """
+    
+    @staticmethod
+    def delete_display_config_by_grid_and_display_id_query():
+        """Get SQL query to delete display config by gridNameId and displayId"""
+        return "DELETE FROM result_display_config WHERE gridNameId = %s AND displayId = %s"

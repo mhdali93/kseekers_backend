@@ -82,3 +82,17 @@ class LookupQueryHelper:
         """Get SQL query to delete lookup value"""
         return "DELETE FROM lookup_values WHERE id = %s"
     
+    @staticmethod
+    def update_lookup_value_by_type_and_code_query():
+        """Get SQL query to update lookup value by type ID and code"""
+        return """
+            UPDATE lookup_values 
+            SET value = %s, description = %s, is_active = %s, sort_order = %s
+            WHERE lookup_type_id = %s AND code = %s
+        """
+    
+    @staticmethod
+    def delete_lookup_value_by_type_and_code_query():
+        """Get SQL query to delete lookup value by type ID and code"""
+        return "DELETE FROM lookup_values WHERE lookup_type_id = %s AND code = %s"
+    

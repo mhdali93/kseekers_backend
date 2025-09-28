@@ -9,7 +9,8 @@ This script sets up the database by running migrations.
 import os
 import sys
 import logging
-import pymysql
+import mysql.connector
+from mysql.connector import Error
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +31,7 @@ def create_database_if_not_exists():
     """Create the database if it doesn't exist"""
     try:
         # Connect to MySQL server (without specifying database)
-        conn = pymysql.connect(
+        conn = mysql.connector.connect(
             host=config.db_host,
             port=int(config.db_port),
             user=config.db_user,

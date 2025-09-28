@@ -168,3 +168,30 @@ class LookUpDao:
     def look_up(self, type_name):
         """Get lookup values by type name - main method for backward compatibility"""
         return self.get_lookup_values_by_type_name(type_name)
+    
+    def update_lookup_value_by_type_and_code(self, lookup_type_id, code, value_data):
+        """Update lookup value by type ID and code"""
+        try:
+            query = LookupQueryHelper.update_lookup_value_by_type_and_code_query()
+            self.db_manager.execute_update(query, (
+                value_data['value'],
+                value_data.get('description'),
+                value_data.get('is_active', True),
+                value_data.get('sort_order', 0),
+                lookup_type_id,
+                code
+            ))
+            return True
+        except Exception as e:
+            logging.error(f"Error in update_lookup_value_by_type_and_code: {e}")
+            return False
+    
+    def delete_lookup_value_by_type_and_code(self, lookup_type_id, code):
+        """Delete lookup value by type ID and code"""
+        try:
+            query = LookupQueryHelper.delete_lookup_value_by_type_and_code_query()
+            self.db_manager.execute_update(query, (lookup_type_id, code))
+            return True
+        except Exception as e:
+            logging.error(f"Error in delete_lookup_value_by_type_and_code: {e}")
+            return False

@@ -1,10 +1,13 @@
 from functools import wraps
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union, List
 import logging
 import os
-from fastapi import Request
+from fastapi import Request, HTTPException, Query
+from models.returnjson import ReturnJson
+from models.enums import HTTPStatus, ExceptionMessage
+from logical.logger import log_request, update_log
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -110,4 +113,134 @@ class DecoratorUtils:
                     # Re-raise the exception to maintain normal error handling
                     raise
                     
-            return sync_wrapper 
+            return sync_wrapper
+
+    @staticmethod
+    def api_response(
+            success_message: str = "Operation completed successfully",
+            error_message: str = "An error occurred",
+            success_status: HTTPStatus = HTTPStatus.success,
+            error_status: HTTPStatus = HTTPStatus.error,
+            include_data: bool = True
+        ):
+        """
+        Decorator to standardize API response handling across all endpoints.
+        
+        Args:
+            success_message: Message to return on successful operation
+            error_message: Message to return on error
+            success_status: HTTP status for successful operations
+            error_status: HTTP status for errors
+            include_data: Whether to include data in response (for delete operations)
+        """
+        def decorator(func: Callable) -> Callable:
+            @wraps(func)
+            async def wrapper(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+                start_time = time.time()
+                return_json = {}
+                
+                # Extract logger from kwargs if present
+                logger_param = kwargs.get('logger')
+                
+                try:
+                    # Execute the controller method
+                    result = await func(*args, **kwargs)
+                    
+                    # Handle different result types
+                    if result is None:
+                        # No data returned (e.g., delete operations)
+                        return_json = ReturnJson(
+                            status_and_code=success_status,
+                            rjson={"data": [], "error": [], "message": success_message},
+                            row_count=0
+                        )
+                    elif isinstance(result, (list, tuple)):
+                        # List of objects returned
+                        if include_data and result:
+                            # Convert objects to dict if they have to_dict method
+                            if hasattr(result[0], 'to_dict'):
+                                data = [item.to_dict() for item in result]
+                            else:
+                                data = result
+                        else:
+                            data = result if include_data else []
+                        
+                        return_json = ReturnJson(
+                            status_and_code=success_status,
+                            rjson={"data": data, "error": [], "message": success_message},
+                            row_count=len(result)
+                        )
+                    elif isinstance(result, dict):
+                        # Dictionary returned (e.g., permissions, stats)
+                        return_json = ReturnJson(
+                            status_and_code=success_status,
+                            rjson={"data": result, "error": [], "message": success_message},
+                            row_count=len(result) if isinstance(result, (list, dict)) else 1
+                        )
+                    else:
+                        # Single object returned
+                        if hasattr(result, 'to_dict'):
+                            data = result.to_dict()
+                        else:
+                            data = result
+                        
+                        return_json = ReturnJson(
+                            status_and_code=success_status,
+                            rjson={"data": data, "error": [], "message": success_message},
+                            row_count=1
+                        )
+                        
+                except ValueError as e:
+                    return_json = ReturnJson(
+                        status_and_code=HTTPStatus.bad_request,
+                        rjson={"data": [], "error": [str(e)], "message": str(e)},
+                        row_count=0
+                    )
+                except HTTPException as e:
+                    return_json = ReturnJson(
+                        status_and_code=e.status_code,
+                        rjson={"data": [], "error": [e.detail], "message": e.detail},
+                        row_count=0
+                    )
+                except Exception as e:
+                    return_json = ReturnJson(
+                        status_and_code=error_status,
+                        rjson={"data": [], "error": [str(e)], "message": error_message},
+                        row_count=0
+                    )
+                finally:
+                    end_time = time.time()
+                    return_json.set_fetch_time((end_time - start_time))
+                    if logger_param:
+                        update_log(logger_param, return_json)
+                
+                return return_json.get_return_json()
+            
+            return wrapper
+        return decorator
+
+    @staticmethod
+    def create_endpoint(
+        success_message: str = "Operation completed successfully",
+        error_message: str = "An error occurred",
+        success_status: HTTPStatus = HTTPStatus.success,
+        error_status: HTTPStatus = HTTPStatus.error,
+        include_data: bool = True
+    ):
+        """
+        Decorator factory for creating standardized API endpoints.
+        Combines @log_request, @jwt_auth_required, and @api_response decorators.
+        """
+        def decorator(func: Callable) -> Callable:
+            # Apply the decorators in the correct order
+            decorated_func = log_request(func)
+            decorated_func = DecoratorUtils.api_response(
+                success_message=success_message,
+                error_message=error_message,
+                success_status=success_status,
+                error_status=error_status,
+                include_data=include_data
+            )(decorated_func)
+            
+            return decorated_func
+        return decorator 

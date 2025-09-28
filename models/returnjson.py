@@ -1,8 +1,11 @@
 from fastapi.responses import JSONResponse
-
+from models.enums import HTTPStatus
 
 class ReturnJson:
     def __init__(self, fetch_time=None, status_and_code=None, rjson={}, row_count=0, message=""):
+        if type(status_and_code) == int:
+            status_and_code = HTTPStatus.from_code(status_and_code)
+
         self.http_status = None
         self.fetch_time = None
         self.result_json = None

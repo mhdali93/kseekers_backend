@@ -55,10 +55,11 @@ migrations_dir = os.getenv('MIGRATIONS_DIR', 'migrations')
 # JWT configuration
 secret = os.getenv('secret')
 algorithm = os.getenv('algorithm')
+expiry = os.getenv('jwt_expiry', 2 * 60 * 60) # 2 hours Default
 
 # Logging configuration
 logging_path = os.getenv('logging_path', 'logs/app.log')
-logging_file_size = os.getenv('logging_file_size', '10485760')  # 10MB default
-logging_backup_count = os.getenv('logging_backup_count', '5')
+logging_file_size = int(os.getenv('logging_file_size', '10485760'))  # 10MB default
+logging_backup_count = int(os.getenv('logging_backup_count', '5'))
 
 

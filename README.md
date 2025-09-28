@@ -8,7 +8,7 @@ A FastAPI backend application for KSeekers with MySQL support and custom connect
 
 - Python 3.7 or higher
 - MySQL 5.7+ or MySQL 8.0+
-- PyMySQL driver (included in requirements.txt)
+- mysql-connector-python driver (included in requirements.txt)
 
 ### Installation
 

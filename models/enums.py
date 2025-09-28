@@ -71,6 +71,13 @@ class HTTPStatus(Enum):
     error = (500, 'application error occured')
     existing_session = (435, 'session already exists')
 
+    @classmethod
+    def from_code(cls, code):
+        for member in cls:
+            if member.value[0] == code:
+                return member
+        return None
+
 
 class AppStatus(Enum):
     success = {'code': 200, 'message': 'success'}

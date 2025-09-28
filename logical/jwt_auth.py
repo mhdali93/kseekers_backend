@@ -14,7 +14,7 @@ from models.enums import HTTPStatus
 # JWT configuration
 JWT_SECRET = config.secret
 JWT_ALGORITHM = config.algorithm
-JWT_EXPIRY = 15 * 60  # 15 minutes
+JWT_EXPIRY = config.expiry
 
 
 class JWTHandler:
@@ -154,17 +154,17 @@ def jwt_auth_required(f):
                     return await f(*args, **kwargs)
                 else:
                     raise HTTPException(
-                        status_code=HTTPStatus.unauthorized.value[0],
+                        status_code=HTTPStatus.unauthorized,
                         detail="Invalid or expired token"
                     )
             else:
                 raise HTTPException(
-                    status_code=HTTPStatus.unauthorized.value[0],
+                    status_code=HTTPStatus.unauthorized,
                     detail="Invalid authorization format"
                 )
         else:
             raise HTTPException(
-                status_code=HTTPStatus.unauthorized.value[0],
+                status_code=HTTPStatus.unauthorized,
                 detail="Authorization header is missing"
             )
     

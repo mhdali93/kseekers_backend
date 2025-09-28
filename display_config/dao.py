@@ -113,6 +113,50 @@ class DisplayConfigDAO:
             logging.error(f"Error deleting display config {config_id}: {e}")
             raise
     
+    def upsert_display_configs(self, grid_name_id, configs):
+        """Upsert display configs - update existing or insert new, remove extras"""
+        try:
+            # Get existing configs for this grid
+            existing_configs = self.get_display_configs_by_grid(grid_name_id)
+            existing_display_ids = {config.displayId for config in existing_configs}
+            
+            # Process each config in the request
+            new_display_ids = set()
+            for config in configs:
+                display_id = config['displayId']
+                new_display_ids.add(display_id)
+                
+                if display_id in existing_display_ids:
+                    # Update existing config
+                    self.update_display_config_by_grid_and_display_id(
+                        grid_name_id, display_id, config
+                    )
+                else:
+                    # Insert new config
+                    self.create_display_config(
+                        grid_name_id,
+                        config['displayId'],
+                        config['title'],
+                        config.get('hidden', 0),
+                        config.get('width'),
+                        config.get('sortIndex', 0),
+                        config.get('ellipsis'),
+                        config.get('align'),
+                        config.get('dbDataType'),
+                        config.get('codeDataType'),
+                        config.get('format')
+                    )
+            
+            # Remove configs that are no longer in the request
+            configs_to_remove = existing_display_ids - new_display_ids
+            for display_id in configs_to_remove:
+                self.delete_display_config_by_grid_and_display_id(grid_name_id, display_id)
+            
+            return True
+        except Exception as e:
+            logging.error(f"Error upserting display configs for grid {grid_name_id}: {e}")
+            raise
+    
     def get_display_config_by_display_id(self, display_id):
         """Get display config by displayId"""
         try:
@@ -127,15 +171,20 @@ class DisplayConfigDAO:
             raise
     
     # Grid Metadata Methods
-    def get_all_grid_metadata(self):
-        """Get all grid metadata"""
+    def get_grid_metadata_list(self, name=None, is_active=None):
+        """Get grid metadata list with optional filters"""
         try:
-            query = DisplayConfigQueryHelper.get_all_grid_metadata_query()
-            results = self.db_manager.execute_query(query)
+            query = DisplayConfigQueryHelper.get_grid_metadata_list_query(name, is_active)
+            params = []
+            if name:
+                params.append(f"%{name}%")
+            if is_active is not None:
+                params.append(is_active)
             
+            results = self.db_manager.execute_query(query, tuple(params))
             return [GridMetadata.from_dict(row) for row in results]
         except Exception as e:
-            logging.error(f"Error getting all grid metadata: {e}")
+            logging.error(f"Error getting grid metadata list: {e}")
             raise
     
     def get_grid_metadata_by_id(self, grid_id):
@@ -215,4 +264,36 @@ class DisplayConfigDAO:
             return rows_affected > 0
         except Exception as e:
             logging.error(f"Error deleting grid metadata {grid_id}: {e}")
+            raise
+    
+    def update_display_config_by_grid_and_display_id(self, grid_name_id, display_id, config_data):
+        """Update display config by gridNameId and displayId"""
+        try:
+            query = DisplayConfigQueryHelper.update_display_config_by_grid_and_display_id_query()
+            rows_affected = self.db_manager.execute_update(query, (
+                config_data['title'],
+                config_data.get('hidden', 0),
+                config_data.get('width'),
+                config_data.get('sortIndex', 0),
+                config_data.get('ellipsis'),
+                config_data.get('align'),
+                config_data.get('dbDataType'),
+                config_data.get('codeDataType'),
+                config_data.get('format'),
+                grid_name_id,
+                display_id
+            ))
+            return rows_affected > 0
+        except Exception as e:
+            logging.error(f"Error updating display config by grid and display ID: {e}")
+            raise
+    
+    def delete_display_config_by_grid_and_display_id(self, grid_name_id, display_id):
+        """Delete display config by gridNameId and displayId"""
+        try:
+            query = DisplayConfigQueryHelper.delete_display_config_by_grid_and_display_id_query()
+            rows_affected = self.db_manager.execute_update(query, (grid_name_id, display_id))
+            return rows_affected > 0
+        except Exception as e:
+            logging.error(f"Error deleting display config by grid and display ID: {e}")
             raise

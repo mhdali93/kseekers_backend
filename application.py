@@ -22,6 +22,7 @@ from routes.healthcheck_routes import HealthCheckRoutes
 from look_up.routes import LookUpRoutes
 from auth.routes import AuthRoutes
 from display_config.routes import DisplayConfigRoutes
+from rbac.routes import RBACRoutes
 
 app = FastAPI(
     title="kseekers",
@@ -64,6 +65,7 @@ app.include_router(HealthCheckRoutes().app, tags=["HEALTH CHECK"])
 app.include_router(LookUpRoutes().app)
 app.include_router(AuthRoutes().app)
 app.include_router(DisplayConfigRoutes().app)
+app.include_router(RBACRoutes().app)
 
 
 if __name__ == "__main__":
