@@ -30,11 +30,11 @@ class UserDAO:
         # Create user using query helper
         now = datetime.now()
         try:
-            query, values = AuthQueryHelper.create_user_query(
+            query = AuthQueryHelper.create_user_query(
                 username=username, email=email, phone=phone, 
                 is_active=True, is_admin=False, created_at=now, updated_at=now
             )
-            user_id = self.db_manager.execute_insert(query, values)
+            user_id = self.db_manager.execute_insert(query)
             logging.info(f"USER_DAO: User created - user_id={user_id}, username={username}")
             
             return User(id=user_id, username=username, email=email, phone=phone)
@@ -92,11 +92,11 @@ class OTPDAO:
             expires_at = datetime.now() + timedelta(minutes=5)
             now = datetime.now()
             
-            query, values = AuthQueryHelper.create_otp_query(
+            query = AuthQueryHelper.create_otp_query(
                 user_id=user_id, code=code, expires_at=expires_at, 
                 is_used=False, created_at=now
             )
-            self.db_manager.execute_insert(query, values)
+            self.db_manager.execute_insert(query)
             
             # Log for development (in production would send via SMS/email)
             DecoratorUtils.highlighted_print(f"*** OTP: {code} for user_id {user_id} ***")

@@ -2067,7 +2067,7 @@ db_host = os.getenv('db_host', 'localhost')
 db_port = os.getenv('db_port', '3306')
 db_user = os.getenv('db_user', 'root')
 db_password = os.getenv('db_password', '')
-mp_database = os.getenv('mp_database', 'kseekers')
+ks_database = os.getenv('ks_database', 'kseekers')
 db_conn_pool = int(os.getenv('DB_CONN_POOL', '5'))
 db_conn_pool_max = int(os.getenv('DB_CONN_POOL_MAX', '10'))
 db_echo = os.getenv('DB_ECHO', 'False').lower() == 'true'
@@ -2104,7 +2104,7 @@ db_host=localhost
 db_port=3306
 db_user=root
 db_password=your_password
-mp_database=kseekers
+ks_database=kseekers
 DB_CONN_POOL=5
 DB_CONN_POOL_MAX=10
 DB_ECHO=False
@@ -2894,7 +2894,7 @@ pip install PyMySQL==1.1.0
 **Configuration**:
 ```bash
 # Test configuration loading
-python -c "import config; print(f'DB: {config.mp_database}')"
+python -c "import config; print(f'DB: {config.ks_database}')"
 
 # Check environment variables
 python -c "import os; print(os.getenv('db_host'))"

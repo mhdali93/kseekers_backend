@@ -1,6 +1,6 @@
 import uvicorn
 import os
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.exceptions import RequestValidationError
 import config
 
@@ -23,6 +23,10 @@ from look_up.routes import LookUpRoutes
 from auth.routes import AuthRoutes
 from display_config.routes import DisplayConfigRoutes
 from rbac.routes import RBACRoutes
+from users.routes import UserRoutes
+
+# Exception handlers
+from middlerware.custom_exception_handler import HTTPExceptionHandler, RequestValidationExceptionHandler
 
 app = FastAPI(
     title="kseekers",
@@ -61,12 +65,17 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# Add exception handlers
+app.add_exception_handler(HTTPException, HTTPExceptionHandler.handler)
+app.add_exception_handler(RequestValidationError, RequestValidationExceptionHandler.handler)
+
 # Initialize route instances
 health_routes = HealthCheckRoutes()
 lookup_routes = LookUpRoutes()
 auth_routes = AuthRoutes()
 display_config_routes = DisplayConfigRoutes()
 rbac_routes = RBACRoutes()
+user_routes = UserRoutes()
 
 # Include routers
 app.include_router(health_routes.app, tags=["HEALTH CHECK"])
@@ -74,6 +83,7 @@ app.include_router(lookup_routes.app)
 app.include_router(auth_routes.app)
 app.include_router(display_config_routes.app)
 app.include_router(rbac_routes.app)
+app.include_router(user_routes.app)
 
 
 if __name__ == "__main__":

@@ -81,7 +81,7 @@ class AuthQueryHelper:
     
     @staticmethod
     def create_user_query(username=None, email=None, phone=None, is_active=None, is_admin=None, created_at=None, updated_at=None):
-        """Get SQL query to create a new user with parameterized values"""
+        """Get SQL query to create a new user with values directly bound"""
         if username is None:
             raise ValueError("username is required for create_user_query")
         if email is None:
@@ -89,36 +89,36 @@ class AuthQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['username', 'email']
-        values = [username, email]
+        values = [f"'{username}'", f"'{email}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if phone is not None:
             columns.append('phone')
-            values.append(phone)
+            values.append(f"'{phone}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(AuthQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(AuthQueryHelper._convert_boolean_to_int(is_active)))
         if is_admin is not None:
             columns.append('is_admin')
-            values.append(AuthQueryHelper._convert_boolean_to_int(is_admin))
+            values.append(str(AuthQueryHelper._convert_boolean_to_int(is_admin)))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         if updated_at is not None:
             columns.append('updated_at')
-            values.append(updated_at)
+            values.append(f"'{updated_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO users ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"AUTH_QUERY_HELPER: Generated query - create_user_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO users ({columns_str}) VALUES ({values_str})"
+        logging.info(f"AUTH_QUERY_HELPER: Generated query - create_user_query: {query}")
+        return query
     
     @staticmethod
     def create_otp_query(user_id=None, code=None, expires_at=None, is_used=None, created_at=None):
-        """Get SQL query to create a new OTP with parameterized values"""
+        """Get SQL query to create a new OTP with values directly bound"""
         if user_id is None:
             raise ValueError("user_id is required for create_otp_query")
         if code is None:
@@ -128,23 +128,23 @@ class AuthQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['user_id', 'code', 'expires_at']
-        values = [user_id, code, expires_at]
+        values = [str(user_id), f"'{code}'", f"'{expires_at}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if is_used is not None:
             columns.append('is_used')
-            values.append(AuthQueryHelper._convert_boolean_to_int(is_used))
+            values.append(str(AuthQueryHelper._convert_boolean_to_int(is_used)))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO otps ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"AUTH_QUERY_HELPER: Generated query - create_otp_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO otps ({columns_str}) VALUES ({values_str})"
+        logging.info(f"AUTH_QUERY_HELPER: Generated query - create_otp_query: {query}")
+        return query
     
     @staticmethod
     def mark_otp_as_used_query(otp_id=None):

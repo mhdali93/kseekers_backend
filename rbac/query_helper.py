@@ -13,7 +13,7 @@ class RBACQueryHelper:
     # Role Queries
     @staticmethod
     def create_role_query(name=None, display_name=None, description=None, is_active=None, is_system_role=None, created_at=None, updated_at=None):
-        """Returns SQL query for creating a new role with parameterized values"""
+        """Returns SQL query for creating a new role with values directly bound"""
         # Validate mandatory fields
         if name is None:
             raise ValueError("name is required for create_role_query")
@@ -22,32 +22,32 @@ class RBACQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['name', 'display_name']
-        values = [name, display_name]
+        values = [f"'{name}'", f"'{display_name}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if description is not None:
             columns.append('description')
-            values.append(description)
+            values.append(f"'{description}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(RBACQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(RBACQueryHelper._convert_boolean_to_int(is_active)))
         if is_system_role is not None:
             columns.append('is_system_role')
-            values.append(RBACQueryHelper._convert_boolean_to_int(is_system_role))
+            values.append(str(RBACQueryHelper._convert_boolean_to_int(is_system_role)))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         if updated_at is not None:
             columns.append('updated_at')
-            values.append(updated_at)
+            values.append(f"'{updated_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO roles ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"RBAC_QUERY_HELPER: Generated query - create_role_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO roles ({columns_str}) VALUES ({values_str})"
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - create_role_query: {query}")
+        return query
     
     @staticmethod
     def get_role_by_id_query(role_id=None):
@@ -71,39 +71,34 @@ class RBACQueryHelper:
     
     @staticmethod
     def update_role_query(role_id=None, **kwargs):
-        """Returns SQL query for updating role with parameterized values"""
+        """Returns SQL query for updating role with values directly bound"""
         if role_id is None:
             raise ValueError("role_id is required for update_role_query")
         
         if not kwargs:
             raise ValueError("At least one field must be provided for update")
         
-        # Build dynamic set clauses and values
+        # Build dynamic set clauses with values directly bound
         set_clauses = []
-        values = []
         
         # Handle each field in kwargs
         for field, value in kwargs.items():
             if field in ['name', 'display_name', 'description', 'is_active', 'is_system_role']:
-                set_clauses.append(f"{field} = %s")
                 if field in ['is_active', 'is_system_role']:
-                    values.append(RBACQueryHelper._convert_boolean_to_int(value))
+                    set_clauses.append(f"{field} = {RBACQueryHelper._convert_boolean_to_int(value)}")
                 else:
-                    values.append(value)
+                    set_clauses.append(f"{field} = '{value}'")
         
         if not set_clauses:
             raise ValueError("No valid fields provided for update")
         
-        # Add updated_at
-        set_clauses.append("updated_at = %s")
-        values.append(kwargs.get('updated_at'))
+        # Add updated_at if provided
+        if 'updated_at' in kwargs:
+            set_clauses.append(f"updated_at = '{kwargs['updated_at']}'")
         
-        # Add role_id for WHERE clause
-        values.append(role_id)
-        
-        query = f"UPDATE roles SET {', '.join(set_clauses)} WHERE id = %s"
-        logging.info(f"RBAC_QUERY_HELPER: Generated query - update_role_query: {query} with values: {values}")
-        return query, values
+        query = f"UPDATE roles SET {', '.join(set_clauses)} WHERE id = {role_id}"
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - update_role_query: {query}")
+        return query
     
     @staticmethod
     def check_role_name_exists_query(name=None, exclude_id=None):
@@ -123,7 +118,7 @@ class RBACQueryHelper:
     # Right Queries
     @staticmethod
     def create_right_query(name=None, display_name=None, description=None, resource_type=None, resource_path=None, http_method=None, module=None, is_active=None, is_system_right=None, created_at=None, updated_at=None):
-        """Returns SQL query for creating a new right with parameterized values"""
+        """Returns SQL query for creating a new right with values directly bound"""
         # Validate mandatory fields
         if name is None:
             raise ValueError("name is required for create_right_query")
@@ -132,44 +127,44 @@ class RBACQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['name', 'display_name']
-        values = [name, display_name]
+        values = [f"'{name}'", f"'{display_name}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if description is not None:
             columns.append('description')
-            values.append(description)
+            values.append(f"'{description}'")
         if resource_type is not None:
             columns.append('resource_type')
-            values.append(resource_type)
+            values.append(f"'{resource_type}'")
         if resource_path is not None:
             columns.append('resource_path')
-            values.append(resource_path)
+            values.append(f"'{resource_path}'")
         if http_method is not None:
             columns.append('http_method')
-            values.append(http_method)
+            values.append(f"'{http_method}'")
         if module is not None:
             columns.append('module')
-            values.append(module)
+            values.append(f"'{module}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(RBACQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(RBACQueryHelper._convert_boolean_to_int(is_active)))
         if is_system_right is not None:
             columns.append('is_system_right')
-            values.append(RBACQueryHelper._convert_boolean_to_int(is_system_right))
+            values.append(str(RBACQueryHelper._convert_boolean_to_int(is_system_right)))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         if updated_at is not None:
             columns.append('updated_at')
-            values.append(updated_at)
+            values.append(f"'{updated_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO rights ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"RBAC_QUERY_HELPER: Generated query - create_right_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO rights ({columns_str}) VALUES ({values_str})"
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - create_right_query: {query}")
+        return query
     
     @staticmethod
     def get_right_by_id_query(right_id=None):
@@ -193,40 +188,35 @@ class RBACQueryHelper:
     
     @staticmethod
     def update_right_query(right_id=None, **kwargs):
-        """Returns SQL query for updating right with parameterized values"""
+        """Returns SQL query for updating right with values directly bound"""
         if right_id is None:
             raise ValueError("right_id is required for update_right_query")
         
         if not kwargs:
             raise ValueError("At least one field must be provided for update")
         
-        # Build dynamic set clauses and values
+        # Build dynamic set clauses with values directly bound
         set_clauses = []
-        values = []
         
         # Handle each field in kwargs
         for field, value in kwargs.items():
             if field in ['name', 'display_name', 'description', 'resource_type', 
                        'resource_path', 'http_method', 'module', 'is_active', 'is_system_right']:
-                set_clauses.append(f"{field} = %s")
                 if field in ['is_active', 'is_system_right']:
-                    values.append(RBACQueryHelper._convert_boolean_to_int(value))
+                    set_clauses.append(f"{field} = {RBACQueryHelper._convert_boolean_to_int(value)}")
                 else:
-                    values.append(value)
+                    set_clauses.append(f"{field} = '{value}'")
         
         if not set_clauses:
             raise ValueError("No valid fields provided for update")
         
-        # Add updated_at
-        set_clauses.append("updated_at = %s")
-        values.append(kwargs.get('updated_at'))
+        # Add updated_at if provided
+        if 'updated_at' in kwargs:
+            set_clauses.append(f"updated_at = '{kwargs['updated_at']}'")
         
-        # Add right_id for WHERE clause
-        values.append(right_id)
-        
-        query = f"UPDATE rights SET {', '.join(set_clauses)} WHERE id = %s"
-        logging.info(f"RBAC_QUERY_HELPER: Generated query - update_right_query: {query} with values: {values}")
-        return query, values
+        query = f"UPDATE rights SET {', '.join(set_clauses)} WHERE id = {right_id}"
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - update_right_query: {query}")
+        return query
     
     @staticmethod
     def check_right_name_exists_query(name=None, exclude_id=None):
@@ -289,7 +279,7 @@ class RBACQueryHelper:
     
     @staticmethod
     def add_role_rights_query(role_id=None, right_id=None, granted_by=None, granted_at=None, is_active=None, created_at=None, updated_at=None):
-        """Returns SQL query for adding role rights with parameterized values"""
+        """Returns SQL query for adding role rights with values directly bound"""
         # Validate mandatory fields
         if role_id is None:
             raise ValueError("role_id is required for add_role_rights_query")
@@ -298,36 +288,36 @@ class RBACQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['role_id', 'right_id']
-        values = [role_id, right_id]
+        values = [str(role_id), str(right_id)]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if granted_by is not None:
             columns.append('granted_by')
-            values.append(granted_by)
+            values.append(str(granted_by))
         if granted_at is not None:
             columns.append('granted_at')
-            values.append(granted_at)
+            values.append(f"'{granted_at}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(RBACQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(RBACQueryHelper._convert_boolean_to_int(is_active)))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         if updated_at is not None:
             columns.append('updated_at')
-            values.append(updated_at)
+            values.append(f"'{updated_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO role_rights ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"RBAC_QUERY_HELPER: Generated query - add_role_rights_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO role_rights ({columns_str}) VALUES ({values_str})"
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - add_role_rights_query: {query}")
+        return query
     
     @staticmethod
     def remove_role_rights_query(is_active=None, updated_at=None, role_id=None, right_id=None):
-        """Returns SQL query for removing role rights with values formatted"""
+        """Returns SQL query for removing role rights with values directly bound"""
         # Validate mandatory fields
         if is_active is None:
             raise ValueError("is_active is required for remove_role_rights_query")
@@ -338,11 +328,13 @@ class RBACQueryHelper:
         if right_id is None:
             raise ValueError("right_id is required for remove_role_rights_query")
         
-        return f"""
+        query = f"""
             UPDATE role_rights 
-            SET is_active = {is_active}, updated_at = '{updated_at}'
+            SET is_active = {RBACQueryHelper._convert_boolean_to_int(is_active)}, updated_at = '{updated_at}'
             WHERE role_id = {role_id} AND right_id = {right_id}
         """
+        logging.info(f"RBAC_QUERY_HELPER: Generated query - remove_role_rights_query: {query}")
+        return query
     
     # User Rights Queries (using user table role_id field)
     @staticmethod

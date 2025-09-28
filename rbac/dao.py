@@ -15,12 +15,12 @@ class RBACDAO:
         """Create a new role"""
         try:
             now = datetime.now()
-            query, values = RBACQueryHelper.create_role_query(
+            query = RBACQueryHelper.create_role_query(
                 name=name, display_name=display_name, description=description, 
                 is_active=1, is_system_role=is_system_role, 
                 created_at=now, updated_at=now
             )
-            role_id = self.db_manager.execute_insert(query, values)
+            role_id = self.db_manager.execute_insert(query)
             
             return Role(id=role_id, name=name, display_name=display_name, 
                        description=description or "", is_active=1, is_system_role=is_system_role)
@@ -45,19 +45,16 @@ class RBACDAO:
         """List roles with optional filters"""
         try:
             query = RBACQueryHelper.list_roles_query()
-            params = []
             
             if name:
-                query += " AND name LIKE %s"
-                params.append(f"%{name}%")
+                query += f" AND name LIKE '%{name}%'"
             
             if is_active is not None:
-                query += " AND is_active = %s"
-                params.append(is_active)
+                query += f" AND is_active = {RBACQueryHelper._convert_boolean_to_int(is_active)}"
             
             query += " ORDER BY is_system_role DESC, name"
             
-            results = self.db_manager.execute_query(query, params)
+            results = self.db_manager.execute_query(query)
             return [Role.from_dict(row) for row in results]
         except Exception as e:
             logging.error(f"RBAC_DAO: Error listing roles - error={str(e)}")
@@ -72,11 +69,11 @@ class RBACDAO:
             updated_at = datetime.now()
             kwargs['updated_at'] = updated_at
             
-            query, values = RBACQueryHelper.update_role_query(
+            query = RBACQueryHelper.update_role_query(
                 role_id=role_id, 
                 **kwargs
             )
-            rows_affected = self.db_manager.execute_update(query, values)
+            rows_affected = self.db_manager.execute_update(query)
             return rows_affected > 0
         except Exception as e:
             logging.error(f"RBAC_DAO: Error updating role - role_id={role_id}, error={str(e)}")
@@ -100,13 +97,13 @@ class RBACDAO:
         """Create a new right"""
         try:
             now = datetime.now()
-            query, values = RBACQueryHelper.create_right_query(
+            query = RBACQueryHelper.create_right_query(
                 name=name, display_name=display_name, description=description, 
                 resource_type=resource_type, resource_path=resource_path, 
                 http_method=http_method, module=module, is_active=1, 
                 is_system_right=is_system_right, created_at=now, updated_at=now
             )
-            right_id = self.db_manager.execute_insert(query, values)
+            right_id = self.db_manager.execute_insert(query)
             
             return Right(id=right_id, name=name, display_name=display_name, 
                         description=description or "", resource_type=resource_type, 
@@ -133,23 +130,19 @@ class RBACDAO:
         """List rights with optional filters"""
         try:
             query = RBACQueryHelper.list_rights_query()
-            params = []
             
             if name:
-                query += " AND name LIKE %s"
-                params.append(f"%{name}%")
+                query += f" AND name LIKE '%{name}%'"
             
             if is_active is not None:
-                query += " AND is_active = %s"
-                params.append(is_active)
+                query += f" AND is_active = {RBACQueryHelper._convert_boolean_to_int(is_active)}"
             
             if module:
-                query += " AND module = %s"
-                params.append(module)
+                query += f" AND module = '{module}'"
             
             query += " ORDER BY module, name"
             
-            results = self.db_manager.execute_query(query, params)
+            results = self.db_manager.execute_query(query)
             return [Right.from_dict(row) for row in results]
         except Exception as e:
             logging.error(f"RBAC_DAO: Error listing rights - error={str(e)}")
@@ -164,11 +157,11 @@ class RBACDAO:
             updated_at = datetime.now()
             kwargs['updated_at'] = updated_at
             
-            query, values = RBACQueryHelper.update_right_query(
+            query = RBACQueryHelper.update_right_query(
                 right_id=right_id, 
                 **kwargs
             )
-            rows_affected = self.db_manager.execute_update(query, values)
+            rows_affected = self.db_manager.execute_update(query)
             return rows_affected > 0
         except Exception as e:
             logging.error(f"RBAC_DAO: Error updating right - right_id={right_id}, error={str(e)}")
@@ -215,11 +208,11 @@ class RBACDAO:
             if to_add:
                 now = datetime.now()
                 for right_id in to_add:
-                    add_query, add_values = RBACQueryHelper.add_role_rights_query(
+                    add_query = RBACQueryHelper.add_role_rights_query(
                         role_id=role_id, right_id=right_id, granted_by=granted_by, 
                         granted_at=now, is_active=True, created_at=now, updated_at=now
                     )
-                    self.db_manager.execute_insert(add_query, add_values)
+                    self.db_manager.execute_insert(add_query)
             
             # Remove old rights
             if to_remove:

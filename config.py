@@ -62,5 +62,3 @@ expiry = int(os.getenv('jwt_expiry', 2 * 60 * 60)) # 2 hours Default
 logging_path = os.getenv('logging_path', 'logs/app.log')
 logging_file_size = int(os.getenv('logging_file_size', '10485760'))  # 10MB default
 logging_backup_count = int(os.getenv('logging_backup_count', '5'))
-
-

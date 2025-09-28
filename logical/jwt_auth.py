@@ -53,6 +53,8 @@ class JWTHandler:
             # Check expiration - support both 'expiry' (old) and 'exp' (new) fields
             expiry_time = payload.get("expiry") or payload.get("exp", 0)
             current_time = time.time()
+
+            logging.info(f"JWT_HANDLER: expiry_time={expiry_time}, current_time={current_time}, time left={expiry_time - current_time}")
             
             if current_time > expiry_time:
                 logging.warning(f"JWT_HANDLER: Token expired - user_id={payload.get('user_id', 'unknown')}")
@@ -153,7 +155,7 @@ class JWTBearer(HTTPBearer):
         if not credentials or not credentials.scheme == "Bearer":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication"
+                detail="Not authenticated"
             )
         
         # Decode and verify token
@@ -164,12 +166,12 @@ class JWTBearer(HTTPBearer):
             if refresh_payload and refresh_payload.get("is_expired"):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, 
-                    detail="Token expired. Please use the refresh token endpoint to get a new token."
+                    detail="Token expired"
                 )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, 
-                    detail="Invalid token"
+                    detail="Not authenticated"
                 )
         
         # Create token data
@@ -177,7 +179,7 @@ class JWTBearer(HTTPBearer):
         if not isinstance(user_id, int):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token data"
+                detail="Not authenticated"
             )
         
         token_data = TokenData(
@@ -250,22 +252,22 @@ def jwt_auth_required(f):
                     if refresh_payload and refresh_payload.get("is_expired"):
                         raise HTTPException(
                             status_code=HTTPStatus.unauthorized.value[0],
-                            detail="Token expired. Please use the refresh token endpoint to get a new token."
+                            detail="Token expired"
                         )
                     else:
                         raise HTTPException(
                             status_code=HTTPStatus.unauthorized.value[0],
-                            detail="Invalid token"
+                            detail="Not authenticated"
                         )
             else:
                 raise HTTPException(
                     status_code=HTTPStatus.unauthorized.value[0],
-                    detail="Invalid authorization format"
+                    detail="Not authenticated"
                 )
         else:
             raise HTTPException(
                 status_code=HTTPStatus.unauthorized.value[0],
-                detail="Authorization header is missing"
+                detail="Not authenticated"
             )
     
     return authenticate 

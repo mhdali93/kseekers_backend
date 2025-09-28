@@ -42,8 +42,8 @@ def create_database_if_not_exists():
         cursor = conn.cursor()
         
         # Create database if it doesn't exist
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{config.mp_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        logging.info(f"Database '{config.mp_database}' is ready")
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{config.ks_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        logging.info(f"Database '{config.ks_database}' is ready")
         
         # Close connection
         cursor.close()

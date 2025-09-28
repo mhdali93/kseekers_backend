@@ -119,7 +119,7 @@ class DBManager:
                         port=int(config.db_port),
                         user=config.db_user,
                         password=config.db_password,
-                        database=config.mp_database,
+                        database=config.ks_database,
                         max_connections=config.db_conn_pool
                     )
         return self.__connection_pool__

@@ -23,45 +23,45 @@ class RBACRoutes:
         self.__add_routes()
     
     def __add_routes(self):
-        # 1. Role Management Routes
+        # 1. Role Management Routes - Clear and descriptive paths
         self.app.add_api_route(
-            path="/roles",
+            path="/roles/create",
             endpoint=self.create_role,
             methods=["POST"],
             dependencies=[Depends(JWTBearer())]
         )
         
         self.app.add_api_route(
-            path="/roles",
+            path="/roles/list",
             endpoint=self.list_roles,
             methods=["GET"],
             dependencies=[Depends(JWTBearer())]
         )
         
         self.app.add_api_route(
-            path="/roles/edit",
+            path="/roles/update",
             endpoint=self.edit_role,
             methods=["POST"],
             dependencies=[Depends(JWTBearer())]
         )
         
-        # 4. Right Management Routes
+        # 4. Right Management Routes - Clear and descriptive paths
         self.app.add_api_route(
-            path="/rights",
+            path="/rights/create",
             endpoint=self.create_right,
             methods=["POST"],
             dependencies=[Depends(JWTBearer())]
         )
         
         self.app.add_api_route(
-            path="/rights",
+            path="/rights/list",
             endpoint=self.list_rights,
             methods=["GET"],
             dependencies=[Depends(JWTBearer())]
         )
         
         self.app.add_api_route(
-            path="/rights/edit",
+            path="/rights/update",
             endpoint=self.edit_right,
             methods=["POST"],
             dependencies=[Depends(JWTBearer())]
@@ -69,7 +69,7 @@ class RBACRoutes:
         
         # 7. Role-Rights Management Routes
         self.app.add_api_route(
-            path="/role-rights/{role_id}",
+            path="/role-rights/get/{role_id}",
             endpoint=self.get_role_rights,
             methods=["GET"],
             dependencies=[Depends(JWTBearer())]
@@ -82,9 +82,9 @@ class RBACRoutes:
             dependencies=[Depends(JWTBearer())]
         )
         
-        # 9. Misc Routes
+        # 9. Misc Routes - These will be moved to users module
         self.app.add_api_route(
-            path="/user-rights/{user_id}",
+            path="/user-rights/get/{user_id}",
             endpoint=self.get_user_ui_rights,
             methods=["GET"],
             dependencies=[Depends(JWTBearer())]

@@ -59,13 +59,13 @@ class DisplayConfigDAO:
                             ellipsis=None, align=None, db_data_type=None, code_data_type=None, format=None):
         """Create a new display config"""
         try:
-            query, values = DisplayConfigQueryHelper.create_display_config_query(
+            query = DisplayConfigQueryHelper.create_display_config_query(
                 grid_name_id=grid_name_id, display_id=display_id, title=title, 
                 hidden=hidden, width=width, sort_index=sortIndex, 
                 ellipsis=ellipsis, align=align, db_data_type=db_data_type, 
                 code_data_type=code_data_type, format=format
             )
-            config_id = self.db_manager.execute_insert(query, values)
+            config_id = self.db_manager.execute_insert(query)
             
             return ResultDisplayConfig(
                 id=config_id, gridNameId=grid_name_id, displayId=display_id, title=title, 
@@ -218,11 +218,11 @@ class DisplayConfigDAO:
     def create_grid_metadata(self, grid_name, grid_name_id, description=None):
         """Create a new grid metadata"""
         try:
-            query, values = DisplayConfigQueryHelper.create_grid_metadata_query(
+            query = DisplayConfigQueryHelper.create_grid_metadata_query(
                 grid_name=grid_name, grid_name_id=grid_name_id, 
                 description=description, is_active=1
             )
-            grid_id = self.db_manager.execute_insert(query, values)
+            grid_id = self.db_manager.execute_insert(query)
             
             return GridMetadata(
                 id=grid_id, gridName=grid_name, gridNameId=grid_name_id, 

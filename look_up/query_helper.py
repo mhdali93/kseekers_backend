@@ -59,33 +59,33 @@ class LookupQueryHelper:
     
     @staticmethod
     def create_lookup_type_query(name=None, description=None, created_at=None):
-        """Get SQL query to create a new lookup type with parameterized values"""
+        """Get SQL query to create a new lookup type with values directly bound"""
         if name is None:
             raise ValueError("name is required for create_lookup_type_query")
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['name']
-        values = [name]
+        values = [f"'{name}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if description is not None:
             columns.append('description')
-            values.append(description)
+            values.append(f"'{description}'")
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO lookup_types ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"LOOKUP_QUERY_HELPER: Generated query - create_lookup_type_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO lookup_types ({columns_str}) VALUES ({values_str})"
+        logging.info(f"LOOKUP_QUERY_HELPER: Generated query - create_lookup_type_query: {query}")
+        return query
     
     @staticmethod
     def create_lookup_value_query(lookup_type_id=None, code=None, value=None, description=None, is_active=None, sort_order=None, created_at=None):
-        """Get SQL query to create a new lookup value with parameterized values"""
+        """Get SQL query to create a new lookup value with values directly bound"""
         if lookup_type_id is None:
             raise ValueError("lookup_type_id is required for create_lookup_value_query")
         if code is None:
@@ -95,29 +95,29 @@ class LookupQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['lookup_type_id', 'code', 'value']
-        values = [lookup_type_id, code, value]
+        values = [str(lookup_type_id), f"'{code}'", f"'{value}'"]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if description is not None:
             columns.append('description')
-            values.append(description)
+            values.append(f"'{description}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(LookupQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(LookupQueryHelper._convert_boolean_to_int(is_active)))
         if sort_order is not None:
             columns.append('sort_order')
-            values.append(sort_order)
+            values.append(str(sort_order))
         if created_at is not None:
             columns.append('created_at')
-            values.append(created_at)
+            values.append(f"'{created_at}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO lookup_values ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"LOOKUP_QUERY_HELPER: Generated query - create_lookup_value_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO lookup_values ({columns_str}) VALUES ({values_str})"
+        logging.info(f"LOOKUP_QUERY_HELPER: Generated query - create_lookup_value_query: {query}")
+        return query
     
     @staticmethod
     def get_lookup_value_by_id_query(value_id=None):

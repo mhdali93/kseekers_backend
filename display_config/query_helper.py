@@ -71,7 +71,7 @@ class DisplayConfigQueryHelper:
     
     @staticmethod
     def create_display_config_query(grid_name_id=None, display_id=None, title=None, hidden=None, width=None, sort_index=None, ellipsis=None, align=None, db_data_type=None, code_data_type=None, format=None):
-        """Get SQL query to create a new display config with parameterized values"""
+        """Get SQL query to create a new display config with values directly bound"""
         if grid_name_id is None:
             raise ValueError("grid_name_id is required for create_display_config_query")
         if display_id is None:
@@ -83,38 +83,38 @@ class DisplayConfigQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['gridNameId', 'displayId', 'title', 'sortIndex']
-        values = [grid_name_id, display_id, title, sort_index]
+        values = [str(grid_name_id), f"'{display_id}'", f"'{title}'", str(sort_index)]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if hidden is not None:
             columns.append('hidden')
-            values.append(DisplayConfigQueryHelper._convert_boolean_to_int(hidden))
+            values.append(str(DisplayConfigQueryHelper._convert_boolean_to_int(hidden)))
         if width is not None:
             columns.append('width')
-            values.append(width)
+            values.append(str(width))
         if ellipsis is not None:
             columns.append('ellipsis')
-            values.append(DisplayConfigQueryHelper._convert_boolean_to_int(ellipsis))
+            values.append(str(DisplayConfigQueryHelper._convert_boolean_to_int(ellipsis)))
         if align is not None:
             columns.append('align')
-            values.append(align)
+            values.append(f"'{align}'")
         if db_data_type is not None:
             columns.append('dbDataType')
-            values.append(db_data_type)
+            values.append(f"'{db_data_type}'")
         if code_data_type is not None:
             columns.append('codeDataType')
-            values.append(code_data_type)
+            values.append(f"'{code_data_type}'")
         if format is not None:
             columns.append('format')
-            values.append(format)
+            values.append(f"'{format}'")
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        query = f"INSERT INTO result_display_config ({columns_str}) VALUES ({placeholders})"
-        logging.info(f"DISPLAY_CONFIG_QUERY_HELPER: Generated query - create_display_config_query: {query} with values: {values}")
-        return query, values
+        query = f"INSERT INTO result_display_config ({columns_str}) VALUES ({values_str})"
+        logging.info(f"DISPLAY_CONFIG_QUERY_HELPER: Generated query - create_display_config_query: {query}")
+        return query
     
     @staticmethod
     def update_display_config_query(grid_name_id=None, display_id=None, title=None, hidden=None, width=None, sort_index=None, ellipsis=None, align=None, db_data_type=None, code_data_type=None, format=None, config_id=None):
@@ -182,14 +182,14 @@ class DisplayConfigQueryHelper:
     def get_grid_metadata_list_query(name=None, is_active=None):
         """Get SQL query for grid metadata list with optional filters"""
         query = "SELECT * FROM grid_metadata WHERE 1=1"
-        params = []
         
         if name:
-            query += " AND gridName LIKE %s"
+            query += f" AND gridName LIKE '%{name}%'"
         if is_active is not None:
-            query += " AND is_active = %s"
+            query += f" AND is_active = {DisplayConfigQueryHelper._convert_boolean_to_int(is_active)}"
         
         query += " ORDER BY gridName"
+        logging.info(f"DISPLAY_CONFIG_QUERY_HELPER: Generated query - get_grid_metadata_list_query: {query}")
         return query
     
     @staticmethod
@@ -215,7 +215,7 @@ class DisplayConfigQueryHelper:
     
     @staticmethod
     def create_grid_metadata_query(grid_name=None, grid_name_id=None, description=None, is_active=None):
-        """Get SQL query to create a new grid metadata with parameterized values"""
+        """Get SQL query to create a new grid metadata with values directly bound"""
         if grid_name is None:
             raise ValueError("grid_name is required for create_grid_metadata_query")
         if grid_name_id is None:
@@ -223,21 +223,23 @@ class DisplayConfigQueryHelper:
         
         # Build dynamic column and value lists, skipping None values for columns with defaults
         columns = ['gridName', 'gridNameId']
-        values = [grid_name, grid_name_id]
+        values = [f"'{grid_name}'", str(grid_name_id)]
         
         # Add optional columns only if they have values (skip None to use DB defaults)
         if description is not None:
             columns.append('description')
-            values.append(description)
+            values.append(f"'{description}'")
         if is_active is not None:
             columns.append('is_active')
-            values.append(DisplayConfigQueryHelper._convert_boolean_to_int(is_active))
+            values.append(str(DisplayConfigQueryHelper._convert_boolean_to_int(is_active)))
         
-        # Create parameterized query
-        placeholders = ', '.join(['%s'] * len(values))
+        # Create query with values directly bound
         columns_str = ', '.join(columns)
+        values_str = ', '.join(values)
         
-        return f"INSERT INTO grid_metadata ({columns_str}) VALUES ({placeholders})", values
+        query = f"INSERT INTO grid_metadata ({columns_str}) VALUES ({values_str})"
+        logging.info(f"DISPLAY_CONFIG_QUERY_HELPER: Generated query - create_grid_metadata_query: {query}")
+        return query
     
     @staticmethod
     def update_grid_metadata_query(grid_name=None, grid_name_id=None, description=None, is_active=None, metadata_id=None):

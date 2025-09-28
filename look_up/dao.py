@@ -92,10 +92,10 @@ class LookUpDao:
         try:
             from datetime import datetime
             now = datetime.now()
-            query, values = LookupQueryHelper.create_lookup_type_query(
+            query = LookupQueryHelper.create_lookup_type_query(
                 name=name, description=description, created_at=now
             )
-            type_id = self.db_manager.execute_insert(query, values)
+            type_id = self.db_manager.execute_insert(query)
             
             return LookupType(id=type_id, name=name, description=description, created_at=now)
             
@@ -108,12 +108,12 @@ class LookUpDao:
         try:
             from datetime import datetime
             now = datetime.now()
-            query, values = LookupQueryHelper.create_lookup_value_query(
+            query = LookupQueryHelper.create_lookup_value_query(
                 lookup_type_id=lookup_type_id, code=code, value=value, 
                 description=description, is_active=1, sort_order=sort_order, 
                 created_at=now
             )
-            value_id = self.db_manager.execute_insert(query, values)
+            value_id = self.db_manager.execute_insert(query)
             
             return LookupValue(
                 id=value_id, lookup_type_id=lookup_type_id, code=code, 

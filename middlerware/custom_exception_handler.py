@@ -1,7 +1,7 @@
 import time
 import traceback
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -49,6 +49,40 @@ class CustomExceptionHandlerMiddleware(BaseHTTPMiddleware):
             returnJson = ReturnJson(end_time - start_time, rtn['code'], rtn['object'], rtn['message'])
             returnJson.http_status = HTTPStatus.bad_request.value[0]
             return returnJson.get_return_json()
+
+
+class HTTPExceptionHandler:
+    @staticmethod
+    async def handler(request: Request, exc: HTTPException):
+        res = Result()
+        
+        # Handle JWT authentication errors specifically
+        if exc.status_code == 401:
+            if exc.detail == "Token expired":
+                error_message = "Token expired"
+                result_code = HTTPStatus.unauthorized
+            elif exc.detail == "Not authenticated":
+                error_message = "Not authenticated"
+                result_code = HTTPStatus.unauthorized
+            else:
+                error_message = exc.detail
+                result_code = HTTPStatus.unauthorized
+        else:
+            error_message = exc.detail
+            result_code = HTTPStatus.bad_request
+        
+        start_time = time.time()
+        res.result_obj = {"data": {},
+                          "error": [],
+                          "message": error_message
+                          }
+        res.result_code = result_code
+        end_time = time.time()
+        rtn = res.get()
+        returnJson = ReturnJson(end_time - start_time, rtn['code'], rtn['object'], rtn['message'])
+        returnJson.http_status = exc.status_code
+
+        return returnJson.get_return_json()
 
 
 class RequestValidationExceptionHandler:
