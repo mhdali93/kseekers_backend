@@ -22,14 +22,14 @@ class LookUpDao:
             return lookup_types
             
         except Exception as e:
-            logging.error(f"Error in get_lookup_types: {e}")
+            logging.error(f"LOOKUP_DAO: Error getting lookup types - error={str(e)}")
             return []
     
     def get_lookup_values_by_type_name(self, type_name):
         """Get lookup values by type name"""
         try:
-            query = LookupQueryHelper.get_lookup_values_by_type_name_query()
-            rows = self.db_manager.execute_query(query, (type_name,))
+            query = LookupQueryHelper.get_lookup_values_by_type_name_query(type_name=type_name)
+            rows = self.db_manager.execute_query(query)
             
             lookup_values = []
             for row in rows:
@@ -39,28 +39,28 @@ class LookUpDao:
             return lookup_values
             
         except Exception as e:
-            logging.error(f"Error in get_lookup_values_by_type_name: {e}")
+            logging.error(f"LOOKUP_DAO: Error getting lookup values by type - type_name={type_name}, error={str(e)}")
             return []
     
     def get_lookup_type_by_name(self, name):
         """Get lookup type by name"""
         try:
-            query = LookupQueryHelper.get_lookup_type_by_name_query()
-            result = self.db_manager.execute_query(query, (name,))
+            query = LookupQueryHelper.get_lookup_type_by_name_query(name=name)
+            result = self.db_manager.execute_query(query)
             
             if result:
                 return LookupType.from_dict(result[0])
             return None
             
         except Exception as e:
-            logging.error(f"Error in get_lookup_type_by_name: {e}")
+            logging.error(f"LOOKUP_DAO: Error getting lookup type by name - name={name}, error={str(e)}")
             return None
     
     def get_lookup_values_by_type_id(self, type_id):
         """Get lookup values by type ID"""
         try:
-            query = LookupQueryHelper.get_lookup_values_by_type_id_query()
-            rows = self.db_manager.execute_query(query, (type_id,))
+            query = LookupQueryHelper.get_lookup_values_by_type_id_query(lookup_type_id=type_id)
+            rows = self.db_manager.execute_query(query)
             
             lookup_values = []
             for row in rows:
@@ -70,99 +70,103 @@ class LookUpDao:
             return lookup_values
             
         except Exception as e:
-            logging.error(f"Error in get_lookup_values_by_type_id: {e}")
+            logging.error(f"LOOKUP_DAO: Error getting lookup values by type ID - type_id={type_id}, error={str(e)}")
             return []
     
     def get_lookup_value_by_id(self, value_id):
         """Get lookup value by ID"""
         try:
-            query = LookupQueryHelper.get_lookup_value_by_id_query()
-            result = self.db_manager.execute_query(query, (value_id,))
+            query = LookupQueryHelper.get_lookup_value_by_id_query(value_id=value_id)
+            result = self.db_manager.execute_query(query)
             
             if result:
                 return LookupValue.from_dict(result[0])
             return None
             
         except Exception as e:
-            logging.error(f"Error in get_lookup_value_by_id: {e}")
+            logging.error(f"LOOKUP_DAO: Error getting lookup value by ID - value_id={value_id}, error={str(e)}")
             return None
     
     def create_lookup_type(self, name, description=None):
         """Create a new lookup type"""
         try:
-            query = LookupQueryHelper.create_lookup_type_query()
             from datetime import datetime
             now = datetime.now()
-            type_id = self.db_manager.execute_insert(query, (name, description, now))
+            query, values = LookupQueryHelper.create_lookup_type_query(
+                name=name, description=description, created_at=now
+            )
+            type_id = self.db_manager.execute_insert(query, values)
             
             return LookupType(id=type_id, name=name, description=description, created_at=now)
             
         except Exception as e:
-            logging.error(f"Error in create_lookup_type: {e}")
+            logging.error(f"LOOKUP_DAO: Error creating lookup type - name={name}, error={str(e)}")
             raise
     
-    def create_lookup_value(self, lookup_type_id, code, value, description=None, is_active=True, sort_order=0):
+    def create_lookup_value(self, lookup_type_id, code, value, description=None, sort_order=0):
         """Create a new lookup value"""
         try:
-            query = LookupQueryHelper.create_lookup_value_query()
             from datetime import datetime
             now = datetime.now()
-            value_id = self.db_manager.execute_insert(query, (
-                lookup_type_id, code, value, description, is_active, sort_order, now
-            ))
+            query, values = LookupQueryHelper.create_lookup_value_query(
+                lookup_type_id=lookup_type_id, code=code, value=value, 
+                description=description, is_active=1, sort_order=sort_order, 
+                created_at=now
+            )
+            value_id = self.db_manager.execute_insert(query, values)
             
             return LookupValue(
                 id=value_id, lookup_type_id=lookup_type_id, code=code, 
-                value=value, description=description, is_active=is_active, 
+                value=value, description=description, is_active=1, 
                 sort_order=sort_order, created_at=now
             )
             
         except Exception as e:
-            logging.error(f"Error in create_lookup_value: {e}")
+            logging.error(f"LOOKUP_DAO: Error creating lookup value - code={code}, error={str(e)}")
             raise
     
     def update_lookup_type(self, type_id, name=None, description=None):
         """Update lookup type"""
         try:
-            query = LookupQueryHelper.update_lookup_type_query()
-            self.db_manager.execute_update(query, (name, description, type_id))
+            query = LookupQueryHelper.update_lookup_type_query(name=name, description=description, type_id=type_id)
+            self.db_manager.execute_update(query)
             return True
             
         except Exception as e:
-            logging.error(f"Error in update_lookup_type: {e}")
+            logging.error(f"LOOKUP_DAO: Error updating lookup type - type_id={type_id}, error={str(e)}")
             return False
     
     def update_lookup_value(self, value_id, code=None, value=None, description=None, is_active=None, sort_order=None):
         """Update lookup value"""
         try:
-            query = LookupQueryHelper.update_lookup_value_query()
-            self.db_manager.execute_update(query, (code, value, description, is_active, sort_order, value_id))
+            query = LookupQueryHelper.update_lookup_value_query(code=code, value=value, description=description, is_active=is_active, sort_order=sort_order, value_id=value_id)
+            self.db_manager.execute_update(query)
             return True
             
         except Exception as e:
-            logging.error(f"Error in update_lookup_value: {e}")
+            logging.error(f"LOOKUP_DAO: Error updating lookup value - value_id={value_id}, error={str(e)}")
             return False
     
     def delete_lookup_type(self, type_id):
         """Delete lookup type"""
         try:
-            query = LookupQueryHelper.delete_lookup_type_query()
-            self.db_manager.execute_update(query, (type_id,))
+            query = LookupQueryHelper.delete_lookup_type_query(type_id=type_id)
+            self.db_manager.execute_update(query)
             return True
             
         except Exception as e:
-            logging.error(f"Error in delete_lookup_type: {e}")
+            logging.error(f"LOOKUP_DAO: Error deleting lookup type - type_id={type_id}, error={str(e)}")
             return False
     
     def delete_lookup_value(self, value_id):
         """Delete lookup value"""
         try:
-            query = LookupQueryHelper.delete_lookup_value_query()
-            self.db_manager.execute_update(query, (value_id,))
+            query = LookupQueryHelper.delete_lookup_value_query(value_id=value_id)
+            self.db_manager.execute_update(query)
             return True
             
         except Exception as e:
-            logging.error(f"Error in delete_lookup_value: {e}")
+            logging.error(f"LOOKUP_DAO: Error deleting lookup value - value_id={value_id}, error={str(e)}")
             return False
     
     def look_up(self, type_name):
@@ -172,26 +176,26 @@ class LookUpDao:
     def update_lookup_value_by_type_and_code(self, lookup_type_id, code, value_data):
         """Update lookup value by type ID and code"""
         try:
-            query = LookupQueryHelper.update_lookup_value_by_type_and_code_query()
-            self.db_manager.execute_update(query, (
-                value_data['value'],
-                value_data.get('description'),
-                value_data.get('is_active', True),
-                value_data.get('sort_order', 0),
-                lookup_type_id,
-                code
-            ))
+            query = LookupQueryHelper.update_lookup_value_by_type_and_code_query(
+                value=value_data['value'],
+                description=value_data.get('description'),
+                is_active=value_data.get('is_active', True),
+                sort_order=value_data.get('sort_order', 0),
+                lookup_type_id=lookup_type_id,
+                code=code
+            )
+            self.db_manager.execute_update(query)
             return True
         except Exception as e:
-            logging.error(f"Error in update_lookup_value_by_type_and_code: {e}")
+            logging.error(f"LOOKUP_DAO: Error updating lookup value by type and code - type_id={lookup_type_id}, code={code}, error={str(e)}")
             return False
     
     def delete_lookup_value_by_type_and_code(self, lookup_type_id, code):
         """Delete lookup value by type ID and code"""
         try:
-            query = LookupQueryHelper.delete_lookup_value_by_type_and_code_query()
-            self.db_manager.execute_update(query, (lookup_type_id, code))
+            query = LookupQueryHelper.delete_lookup_value_by_type_and_code_query(lookup_type_id=lookup_type_id, code=code)
+            self.db_manager.execute_update(query)
             return True
         except Exception as e:
-            logging.error(f"Error in delete_lookup_value_by_type_and_code: {e}")
+            logging.error(f"LOOKUP_DAO: Error deleting lookup value by type and code - type_id={lookup_type_id}, code={code}, error={str(e)}")
             return False

@@ -8,7 +8,6 @@ class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100, description="Role name (unique identifier)")
     display_name: str = Field(..., min_length=2, max_length=255, description="Human-readable role name")
     description: Optional[str] = Field(None, description="Role description")
-    is_active: bool = Field(True, description="Whether the role is active")
 
 class RoleUpdate(BaseModel):
     """Schema for updating a role"""
@@ -44,7 +43,6 @@ class RightCreate(BaseModel):
     resource_path: str = Field(..., min_length=1, max_length=500, description="Resource path or identifier")
     http_method: Optional[str] = Field(None, max_length=10, description="HTTP method for API endpoints")
     module: str = Field(..., min_length=1, max_length=100, description="Module this right belongs to")
-    is_active: bool = Field(True, description="Whether the right is active")
 
 class RightUpdate(BaseModel):
     """Schema for updating a right"""

@@ -55,4 +55,15 @@ class PasswordReset(BaseModel):
 
 class MessageResponse(BaseModel):
     """Schema for message response"""
-    message: str 
+    message: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refresh token request"""
+    access_token: str
+
+
+class RefreshTokenResponse(BaseModel):
+    """Schema for refresh token response"""
+    access_token: str
+    token_type: str = "bearer" 

@@ -4,7 +4,8 @@ from utils.decorator import DecoratorUtils
 
 from auth.auth_schemas import (
     UserCreate, UserResponse, TokenResponse,
-    OTPRequest, OTPVerify, MessageResponse
+    OTPRequest, OTPVerify, MessageResponse,
+    RefreshTokenRequest, RefreshTokenResponse
 )
 from models.returnjson import ReturnJson
 from models.enums import HTTPStatus, ExceptionMessage, UniversalMessage
@@ -47,6 +48,12 @@ class AuthRoutes:
             methods=["GET"],
             dependencies=[Depends(JWTBearer())]
         )
+        
+        self.app.add_api_route(
+            path="/refresh",
+            endpoint=self.refresh_token,
+            methods=["POST"]
+        )
     
     @DecoratorUtils.create_endpoint(
         success_message="User created successfully",
@@ -78,14 +85,23 @@ class AuthRoutes:
     async def request_otp(self, request: Request, request_data: OTPRequest,
                          logger: str = Query(None, include_in_schema=False)):
         """Request an OTP"""
-        # Find user
-        user = self.controller.get_user(request_data.username_or_email)
-        if not user:
-            raise HTTPException(status_code=404, detail=ExceptionMessage.member_not_found.value)
-        
-        # Generate OTP
-        self.controller.generate_otp(user.id)
-        return {"email": user.email}
+        try:
+            # Find user
+            user = self.controller.get_user(request_data.username_or_email)
+            if not user:
+                logging.error(f"AUTH_ROUTES: OTP request failed - User not found: {request_data.username_or_email}")
+                raise HTTPException(status_code=404, detail=ExceptionMessage.member_not_found.value)
+            
+            # Generate OTP
+            self.controller.generate_otp(user.id)
+            logging.info(f"AUTH_ROUTES: OTP request successful - user_id={user.id}")
+            
+            return {"email": user.email}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"AUTH_ROUTES: OTP request failed - error: {str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message=UniversalMessage.access_token.value,
@@ -94,9 +110,17 @@ class AuthRoutes:
     async def verify_otp(self, request: Request, verify: OTPVerify,
                         logger: str = Query(None, include_in_schema=False)):
         """Verify OTP and get token"""
-        # Get token using the login method
-        token = self.controller.login(verify.username_or_email, verify.otp_code)
-        return {"access_token": token, "token_type": "bearer"}
+        try:
+            # Get token using the login method
+            token = self.controller.login(verify.username_or_email, verify.otp_code)
+            logging.info(f"AUTH_ROUTES: OTP verification successful - username={verify.username_or_email}")
+            return {"access_token": token, "token_type": "bearer"}
+        except HTTPException as e:
+            logging.error(f"AUTH_ROUTES: OTP verification failed - status={e.status_code}, detail={e.detail}")
+            raise
+        except Exception as e:
+            logging.error(f"AUTH_ROUTES: OTP verification failed - error: {str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="User profile retrieved successfully",
@@ -119,4 +143,23 @@ class AuthRoutes:
             "email": user.email,
             "phone": user.phone,
             "is_admin": user.is_admin
-        } 
+        }
+    
+    @DecoratorUtils.create_endpoint(
+        success_message="Token refreshed successfully",
+        error_message="Error refreshing token"
+    )
+    async def refresh_token(self, request: Request, refresh_data: RefreshTokenRequest,
+                           logger: str = Query(None, include_in_schema=False)):
+        """Refresh an expired or soon-to-expire JWT token"""
+        try:
+            # Get new token using the refresh method
+            new_token = self.controller.refresh_token(refresh_data.access_token)
+            logging.info("AUTH_ROUTES: Token refresh successful")
+            return {"access_token": new_token, "token_type": "bearer"}
+        except HTTPException as e:
+            logging.error(f"AUTH_ROUTES: Token refresh failed - status={e.status_code}, detail={e.detail}")
+            raise
+        except Exception as e:
+            logging.error(f"AUTH_ROUTES: Token refresh failed - error: {str(e)}")
+            raise 

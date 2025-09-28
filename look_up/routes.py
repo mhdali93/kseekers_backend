@@ -15,8 +15,6 @@ from utils.decorator import DecoratorUtils
 import logging
 
 class LookUpRoutes:
-    application = app = {}
-
     def __init__(self):
         self.app = APIRouter(prefix="/lookup", tags=["Look Up"])
         self.application = self.app
@@ -59,7 +57,12 @@ class LookUpRoutes:
     async def get_lookup_types(self, request: Request,
                               logger: str = Query(None, include_in_schema=False)):
         """Get all lookup types"""
-        return self.lu_controller.get_lookup_types()
+        try:
+            result = self.lu_controller.get_lookup_types()
+            return result
+        except Exception as e:
+            logging.error(f"LOOKUP_ROUTES: Error getting lookup types - error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Lookup values retrieved successfully",
@@ -68,7 +71,12 @@ class LookUpRoutes:
     async def get_lookup_values_by_type(self, request: Request, request_data: LookupValuesByTypeRequest,
                                        logger: str = Query(None, include_in_schema=False)):
         """Get lookup values by type name"""
-        return self.lu_controller.get_lookup_values_by_type(request_data.type_name)
+        try:
+            result = self.lu_controller.get_lookup_values_by_type(request_data.type_name)
+            return result
+        except Exception as e:
+            logging.error(f"LOOKUP_ROUTES: Error getting lookup values - type_name={request_data.type_name}, error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Lookup type managed successfully",
@@ -79,8 +87,13 @@ class LookUpRoutes:
                                 logger: str = Query(None, include_in_schema=False),
                                 token: str = Query(None, include_in_schema=False)):
         """Create or update lookup type (upsert by name)"""
-        result = self.lu_controller.manage_lookup_type(type_data.dict())
-        return {"name": type_data.name}
+        try:
+            result = self.lu_controller.manage_lookup_type(type_data.dict())
+            logging.info(f"LOOKUP_ROUTES: Lookup type managed - name={type_data.name}")
+            return {"name": type_data.name}
+        except Exception as e:
+            logging.error(f"LOOKUP_ROUTES: Error managing lookup type - name={type_data.name}, error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Lookup values managed successfully",
@@ -91,11 +104,21 @@ class LookUpRoutes:
                                   logger: str = Query(None, include_in_schema=False),
                                   token: str = Query(None, include_in_schema=False)):
         """Create or update lookup values for a type (upsert by code)"""
-        success = self.lu_controller.manage_lookup_values(
-            request_data.type_name,
-            [value.dict() for value in request_data.values]
-        )
-        
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to manage lookup values")
+        try:
+            success = self.lu_controller.manage_lookup_values(
+                request_data.type_name,
+                [value.dict() for value in request_data.values]
+            )
+            
+            if not success:
+                logging.error(f"LOOKUP_ROUTES: Failed to manage lookup values - type_name={request_data.type_name}")
+                raise HTTPException(status_code=400, detail="Failed to manage lookup values")
+            
+            logging.info(f"LOOKUP_ROUTES: Lookup values managed - type_name={request_data.type_name}")
+            return {"type_name": request_data.type_name, "success": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"LOOKUP_ROUTES: Error managing lookup values - type_name={request_data.type_name}, error={str(e)}")
+            raise
         return {"type_name": request_data.type_name}

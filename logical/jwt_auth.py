@@ -23,18 +23,25 @@ class JWTHandler:
     @staticmethod
     def create_token(user_id, username, is_admin=False):
         """Create JWT token"""
-        token_expiry = time.time() + JWT_EXPIRY
-        
-        # Create payload with both old and new fields for compatibility
-        payload = {
-            "user_id": user_id,
-            "username": username,
-            "is_admin": is_admin,
-            "memberGUId": str(user_id),  # For legacy compatibility
-            "expiry": token_expiry      # For legacy compatibility
-        }
-        
-        return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        try:
+            token_expiry = time.time() + JWT_EXPIRY
+            
+            # Create payload with both old and new fields for compatibility
+            payload = {
+                "user_id": user_id,
+                "username": username,
+                "is_admin": is_admin,
+                "memberGUId": str(user_id),  # For legacy compatibility
+                "expiry": token_expiry      # For legacy compatibility
+            }
+            
+            token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            logging.info(f"JWT_HANDLER: Token created - user_id={user_id}, username={username}")
+            
+            return token
+        except Exception as e:
+            logging.error(f"JWT_HANDLER: Error creating token - user_id={user_id}, error={str(e)}")
+            raise
     
     @staticmethod
     def decode_token(token):
@@ -45,21 +52,86 @@ class JWTHandler:
             
             # Check expiration - support both 'expiry' (old) and 'exp' (new) fields
             expiry_time = payload.get("expiry") or payload.get("exp", 0)
-            if time.time() > expiry_time:
+            current_time = time.time()
+            
+            if current_time > expiry_time:
+                logging.warning(f"JWT_HANDLER: Token expired - user_id={payload.get('user_id', 'unknown')}")
                 return None
             
             # Create a unified payload with fields for both systems
             user_id = payload.get("user_id") or int(payload.get("memberGUId", 0))
             
-            return {
+            token_data = {
                 "user_id": user_id,
                 "username": payload.get("username", ""),
                 "is_admin": payload.get("is_admin", False),
                 "memberGUId": str(user_id),
                 "expiry": time.time() + JWT_EXPIRY  # Extend token life
             }
+            
+            return token_data
         except Exception as e:
-            logging.error(f"Error decoding JWT: {e}")
+            logging.error(f"JWT_HANDLER: Error decoding JWT: {e}")
+            return None
+    
+    @staticmethod
+    def decode_token_for_refresh(token):
+        """Decode token for refresh purposes - allows expired tokens but validates signature"""
+        try:
+            # Decode the token without checking expiration
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_exp": False})
+            
+            # Get expiry time
+            expiry_time = payload.get("expiry") or payload.get("exp", 0)
+            current_time = time.time()
+            
+            # Check if token is within refresh window (1 hour before expiry)
+            refresh_window = JWT_EXPIRY / 2  # 1 hour if JWT_EXPIRY is 2 hours
+            time_until_expiry = expiry_time - current_time
+            
+            # If token is expired but within refresh window, allow refresh
+            if time_until_expiry < -refresh_window:
+                logging.warning(f"JWT_HANDLER: Token too old for refresh - user_id={payload.get('user_id', 'unknown')}")
+                return None
+            
+            # Create a unified payload with fields for both systems
+            user_id = payload.get("user_id") or int(payload.get("memberGUId", 0))
+            
+            token_data = {
+                "user_id": user_id,
+                "username": payload.get("username", ""),
+                "is_admin": payload.get("is_admin", False),
+                "memberGUId": str(user_id),
+                "expiry": expiry_time,
+                "is_expired": current_time > expiry_time
+            }
+            
+            return token_data
+        except Exception as e:
+            logging.error(f"JWT_HANDLER: Error decoding JWT for refresh: {e}")
+            return None
+    
+    @staticmethod
+    def refresh_token(token):
+        """Refresh an expired or soon-to-expire token"""
+        try:
+            # Decode token for refresh (allows expired tokens)
+            token_data = JWTHandler.decode_token_for_refresh(token)
+            if not token_data:
+                logging.warning("JWT_HANDLER: Invalid token for refresh")
+                return None
+            
+            # Generate new token with same user data
+            new_token = JWTHandler.create_token(
+                user_id=token_data["user_id"],
+                username=token_data["username"],
+                is_admin=token_data["is_admin"]
+            )
+            
+            logging.info(f"JWT_HANDLER: Token refreshed successfully - user_id={token_data['user_id']}")
+            return new_token
+        except Exception as e:
+            logging.error(f"JWT_HANDLER: Error refreshing token: {e}")
             return None
     
     @staticmethod
@@ -76,7 +148,7 @@ class JWTBearer(HTTPBearer):
     
     async def __call__(self, request: Request):
         """Verify JWT token and extract user data"""
-        credentials: HTTPAuthorizationCredentials = await super().__call__(request)
+        credentials = await super().__call__(request)
         
         if not credentials or not credentials.scheme == "Bearer":
             raise HTTPException(
@@ -87,14 +159,29 @@ class JWTBearer(HTTPBearer):
         # Decode and verify token
         payload = JWTHandler.decode_token(credentials.credentials)
         if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Invalid or expired token"
-            )
+            # Try to decode for refresh to provide better error message
+            refresh_payload = JWTHandler.decode_token_for_refresh(credentials.credentials)
+            if refresh_payload and refresh_payload.get("is_expired"):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, 
+                    detail="Token expired. Please use the refresh token endpoint to get a new token."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, 
+                    detail="Invalid token"
+                )
         
         # Create token data
+        user_id = payload.get("user_id")
+        if not isinstance(user_id, int):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token data"
+            )
+        
         token_data = TokenData(
-            user_id=payload.get("user_id"),
+            user_id=user_id,
             username=payload.get("username", ""),
             is_admin=payload.get("is_admin", False)
         )
@@ -135,6 +222,11 @@ def jwt_auth_required(f):
     @wraps(f)
     async def authenticate(*args, **kwargs):
         request = kwargs.get('request')
+        if not request:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Request object not found"
+            )
         
         # Extract token from headers
         if 'Authorization' in request.headers or 'authorization' in request.headers:
@@ -153,18 +245,26 @@ def jwt_auth_required(f):
                     kwargs['token'] = token
                     return await f(*args, **kwargs)
                 else:
-                    raise HTTPException(
-                        status_code=HTTPStatus.unauthorized,
-                        detail="Invalid or expired token"
-                    )
+                    # Try to decode for refresh to provide better error message
+                    refresh_payload = JWTHandler.decode_token_for_refresh(token)
+                    if refresh_payload and refresh_payload.get("is_expired"):
+                        raise HTTPException(
+                            status_code=HTTPStatus.unauthorized.value[0],
+                            detail="Token expired. Please use the refresh token endpoint to get a new token."
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=HTTPStatus.unauthorized.value[0],
+                            detail="Invalid token"
+                        )
             else:
                 raise HTTPException(
-                    status_code=HTTPStatus.unauthorized,
+                    status_code=HTTPStatus.unauthorized.value[0],
                     detail="Invalid authorization format"
                 )
         else:
             raise HTTPException(
-                status_code=HTTPStatus.unauthorized,
+                status_code=HTTPStatus.unauthorized.value[0],
                 detail="Authorization header is missing"
             )
     

@@ -69,8 +69,13 @@ class DisplayConfigRoutes:
                                   logger: str = Query(None, include_in_schema=False),
                                   token: str = Query(None, include_in_schema=False)):
         """Create a new grid metadata"""
-        grid_id = self.controller.create_grid_metadata(grid_data.dict())
-        return {"id": grid_id}
+        try:
+            grid_id = self.controller.create_grid_metadata(grid_data.dict())
+            logging.info(f"DISPLAY_CONFIG_ROUTES: Grid metadata created - id={grid_id}")
+            return {"id": grid_id}
+        except Exception as e:
+            logging.error(f"DISPLAY_CONFIG_ROUTES: Error creating grid metadata - error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Grid metadata list retrieved successfully",
@@ -120,11 +125,21 @@ class DisplayConfigRoutes:
                                     logger: str = Query(None, include_in_schema=False),
                                     token: str = Query(None, include_in_schema=False)):
         """Update display configs with upsert logic"""
-        success = self.controller.update_display_configs(
-            request_data.gridNameId,
-            [config.dict() for config in request_data.configs]
-        )
-        
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to update display configs")
+        try:
+            success = self.controller.update_display_configs(
+                request_data.gridNameId,
+                [config.dict() for config in request_data.configs]
+            )
+            
+            if not success:
+                logging.error(f"DISPLAY_CONFIG_ROUTES: Failed to update display configs - grid_name_id={request_data.gridNameId}")
+                raise HTTPException(status_code=400, detail="Failed to update display configs")
+            
+            logging.info(f"DISPLAY_CONFIG_ROUTES: Display configs updated - grid_name_id={request_data.gridNameId}")
+            return {"success": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"DISPLAY_CONFIG_ROUTES: Error updating display configs - grid_name_id={request_data.gridNameId}, error={str(e)}")
+            raise
         return {"gridNameId": request_data.gridNameId}

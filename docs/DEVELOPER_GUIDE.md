@@ -30,10 +30,13 @@ The KSeekers backend is a **FastAPI-based REST API** that uses **MySQL with core
 
 ### Key Technologies
 - **FastAPI** - Web framework
-- **MySQL** - Database (with PyMySQL driver)
-- **JWT** - Authentication
+- **MySQL** - Database (with mysql-connector-python driver)
+- **JWT** - Authentication with OTP-based login
 - **Custom Connection Pool** - Database connection management
 - **Migration System** - Database schema versioning
+- **RBAC System** - Role-based access control with module support
+- **Display Configuration** - Dynamic grid and result display management
+- **Lookup Services** - Centralized key-value pair management
 
 ---
 
@@ -75,6 +78,10 @@ backend/
 │   ├── exceptions.py         # Custom exception classes
 │   ├── returnjson.py         # Standardized API response format
 │   └── result.py             # Internal result tracking
+├── logical/                   # Shared business logic
+│   ├── jwt_auth.py           # JWT authentication & authorization
+│   ├── logger.py             # Logging utilities
+│   └── s3_handler.py         # AWS S3 integration
 ├── auth/                      # Authentication module
 │   ├── auth_models.py        # User, OTP, TokenData models
 │   ├── auth_schemas.py       # UserCreate, OTPRequest, etc.
@@ -90,18 +97,35 @@ backend/
 │   ├── routes.py             # Lookup API endpoints
 │   └── query_helper.py       # Raw SQL query builders
 ├── display_config/            # Display configuration module
-│   ├── display_config_models.py    # ResultDisplayConfig model
-│   ├── display_config_schemas.py   # ResultDisplayConfigCreate, etc.
+│   ├── display_config_models.py    # GridMetadata, ResultDisplayConfig models
+│   ├── display_config_schemas.py   # GridMetadataCreate, etc.
 │   ├── dao.py                # Display config data access
 │   ├── controller.py         # Display config business logic
 │   ├── routes.py             # Display config API endpoints
 │   └── query_helper.py       # Raw SQL query builders
+├── rbac/                      # Role-based access control module
+│   ├── rbac_models.py        # Role, Right, RoleRight models
+│   ├── rbac_schemas.py       # RoleCreate, RightCreate, etc.
+│   ├── dao.py                # RBAC data access
+│   ├── controller.py         # RBAC business logic
+│   ├── routes.py             # RBAC API endpoints
+│   └── query_helper.py       # Raw SQL query builders
+├── routes/                    # Additional route modules
+│   └── healthcheck_routes.py # Health check endpoints
+├── utils/                     # Utility functions
+│   └── decorator.py          # Common decorators
 ├── migrations/                # Database migrations
-│   └── 01_initial_schema.sql # Initial database schema
+│   ├── 01_initial_schema.sql # Initial database schema
+│   ├── 02_modify_result_display_config_structure.sql
+│   ├── 03_create_rbac_system.sql
+│   ├── 04_simplify_rbac_single_role.sql
+│   └── 05_simplify_rbac_structure.sql
 ├── config.py                  # Configuration management
 ├── setup_database.py         # Database setup script
 ├── run_migrations.py         # Migration runner
-└── application.py            # FastAPI app entry point
+├── application.py            # FastAPI app entry point
+├── requirements.txt          # Python dependencies
+└── pyproject.toml           # Project configuration
 ```
 
 ---
@@ -139,14 +163,18 @@ def close_all(self)
 
 **Key Methods**:
 ```python
-def execute_query(self, query, params=None)
+def execute_query(self, query)
     # Execute SELECT queries, returns list of dictionaries
+    # Query should be f-string with values already interpolated
 
-def execute_update(self, query, params=None)
+def execute_update(self, query)
     # Execute UPDATE/DELETE queries, returns affected row count
+    # Query should be f-string with values already interpolated
 
-def execute_insert(self, query, params=None)
+def execute_insert(self, query, values=None)
     # Execute INSERT queries, returns last inserted ID
+    # For simple queries: query should be f-string with values already interpolated
+    # For complex queries: query can be parameterized with values tuple
 
 def execute_many(self, query, params_list)
     # Execute query multiple times with different parameters
@@ -522,15 +550,15 @@ def get_user_by_id(self, user_id)
 
 **SQL Queries Used**:
 ```sql
--- Create user
-INSERT INTO users (username, email, phone, is_active, is_admin, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s)
+-- Create user (parameterized with dynamic columns - is_active excluded per pattern)
+INSERT INTO users (username, email, phone, is_admin, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s)
 
--- Find user by username or email
-SELECT * FROM users WHERE username = %s OR email = %s LIMIT 1
+-- Find user by username or email (f-string interpolation)
+SELECT * FROM users WHERE username = 'username_value' OR email = 'email_value' LIMIT 1
 
--- Find user by ID
-SELECT * FROM users WHERE id = %s LIMIT 1
+-- Find user by ID (f-string interpolation)
+SELECT * FROM users WHERE id = 123 LIMIT 1
 ```
 
 #### OTPDAO Class
@@ -1520,156 +1548,225 @@ class CustomException(HTTPException):
 
 ## Query Helper System
 
-The system uses **raw SQL query helpers** (no ORM) for better performance and control. Each module contains its own query helper with static methods that return raw SQL strings.
+The system uses **raw SQL query helpers** (no ORM) for better performance and control. Each module contains its own query helper with static methods that return **f-string SQL queries with values already interpolated** for direct execution.
 
 ### 1. Auth Query Helper (`auth/query_helper.py`)
 
-**Purpose**: Provides raw SQL query strings for authentication operations.
+**Purpose**: Provides f-string SQL query strings with values already interpolated for authentication operations.
 
 #### AuthQueryHelper Class:
 ```python
 class AuthQueryHelper:
     @staticmethod
     def get_user_by_username_query(username):
-        # Returns raw SQL string for user by username
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM users WHERE username = '{username}' LIMIT 1"
     
     @staticmethod
     def get_user_by_email_query(email):
-        # Returns raw SQL string for user by email
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM users WHERE email = '{email}' LIMIT 1"
     
     @staticmethod
     def get_user_by_id_query(user_id):
-        # Returns raw SQL string for user by ID
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM users WHERE id = {user_id} LIMIT 1"
     
     @staticmethod
     def get_user_by_username_or_email_query(username_or_email):
-        # Intelligently chooses username or email query based on input
-        # Checks for '@' symbol to determine if it's an email
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM users WHERE username = '{username_or_email}' OR email = '{username_or_email}' LIMIT 1"
     
     @staticmethod
-    def check_existing_user_query(username, email):
-        # Returns raw SQL string to check if user exists by username OR email
+    def create_user_query(username, email, phone=None, is_active=None, is_admin=None, created_at=None, updated_at=None):
+        # Returns parameterized query with dynamic columns
+        # Builds columns and values arrays, skips None values
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO users ({columns_str}) VALUES ({placeholders})", values
     
     @staticmethod
-    def create_user_query():
-        # Returns raw SQL string for creating new user
+    def create_otp_query(user_id, code, expires_at, is_used=None, created_at=None):
+        # Returns parameterized query with dynamic columns
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO otps ({columns_str}) VALUES ({placeholders})", values
     
     @staticmethod
-    def create_otp_query():
-        # Returns raw SQL string for creating OTP
+    def get_latest_unused_otp_query(user_id, code):
+        # Returns parameterized query for OTP verification
+        # Returns tuple: (query_string, values_list)
+        return "SELECT * FROM otps WHERE user_id = %s AND code = %s AND is_used = 0 ORDER BY created_at DESC LIMIT 1", [user_id, code]
     
     @staticmethod
-    def get_latest_unused_otp_query():
-        # Returns raw SQL string for latest unused OTP
-        # Orders by created_at DESC to get most recent
-    
-    @staticmethod
-    def mark_otp_as_used_query():
-        # Returns raw SQL string for marking OTP as used
+    def mark_otp_as_used_query(otp_id):
+        # Returns parameterized query for marking OTP as used
+        # Returns tuple: (query_string, values_list)
+        return "UPDATE otps SET is_used = 1 WHERE id = %s", [otp_id]
 ```
+
+#### Key Patterns:
+1. **F-string interpolation** for simple queries (SELECT, basic WHERE clauses)
+2. **Parameterized queries** for INSERT/UPDATE operations with dynamic columns
+3. **Dynamic column building** - only includes columns that have non-None values
+4. **Boolean conversion** - `_convert_boolean_to_int()` method for database storage
+5. **Returns tuples** - `(query_string, values_list)` for parameterized queries
 
 #### Usage Example:
 ```python
 from auth.query_helper import AuthQueryHelper
 
-# Get user query
+# Simple f-string query (no parameters needed)
 user_query = AuthQueryHelper.get_user_by_username_or_email_query("john@example.com")
+result = db_manager.execute_query(user_query)
 
-# Check existing user
-existing_query = AuthQueryHelper.check_existing_user_query("john", "john@example.com")
+# Parameterized query (returns tuple)
+query, values = AuthQueryHelper.create_user_query(
+    username="john", email="john@example.com", phone="1234567890"
+)
+user_id = db_manager.execute_insert(query, values)
 
-# Create user query
-create_query = AuthQueryHelper.create_user_query()
+# F-string query with values already interpolated
+query = AuthQueryHelper.get_latest_unused_otp_query(user_id=123, code="123456")
+result = db_manager.execute_query(query)
 ```
 
 ### 2. Lookup Query Helper (`look_up/query_helper.py`)
 
-**Purpose**: Provides raw SQL query strings for lookup operations.
+**Purpose**: Provides raw SQL query strings with parameter binding for lookup operations.
 
 #### LookupQueryHelper Class:
 ```python
 class LookupQueryHelper:
     @staticmethod
     def get_lookup_types_query():
-        # Returns raw SQL string for all lookup types
+        # Returns simple SQL string (no parameters)
+        return "SELECT * FROM lookup_types ORDER BY name"
     
     @staticmethod
-    def get_lookup_type_by_name_query():
-        # Returns raw SQL string for lookup type by name
+    def get_lookup_type_by_name_query(name):
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM lookup_types WHERE name = '{name}' LIMIT 1"
     
     @staticmethod
-    def get_lookup_values_by_type_id_query():
-        # Returns raw SQL string for lookup values by type ID
+    def get_lookup_values_by_type_id_query(lookup_type_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT * FROM lookup_values WHERE lookup_type_id = {lookup_type_id} AND is_active = 1 ORDER BY sort_order, value"
     
     @staticmethod
-    def get_lookup_values_by_type_name_query():
-        # Returns raw SQL string for lookup values by type name
+    def get_lookup_values_by_type_name_query(type_name):
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT lv.* FROM lookup_values lv JOIN lookup_types lt ON lv.lookup_type_id = lt.id WHERE lt.name = '{type_name}' AND lv.is_active = 1 ORDER BY lv.sort_order, lv.value"
     
     @staticmethod
-    def create_lookup_type_query():
-        # Returns raw SQL string for creating lookup type
+    def create_lookup_type_query(name, description=None, created_at=None):
+        # Returns parameterized query with dynamic columns
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO lookup_types ({columns_str}) VALUES ({placeholders})", values
     
     @staticmethod
-    def create_lookup_value_query():
-        # Returns raw SQL string for creating lookup value
+    def create_lookup_value_query(lookup_type_id, code, value, description=None, is_active=None, sort_order=None, created_at=None):
+        # Returns parameterized query with dynamic columns
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO lookup_values ({columns_str}) VALUES ({placeholders})", values
+    
+    @staticmethod
+    def update_lookup_type_query(name, description, type_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"UPDATE lookup_types SET name = '{name}', description = '{description}' WHERE id = {type_id}"
+    
+    @staticmethod
+    def update_lookup_value_query(code, value, description, is_active, sort_order, value_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"UPDATE lookup_values SET code = '{code}', value = '{value}', description = '{description}', is_active = {is_active}, sort_order = {sort_order} WHERE id = {value_id}"
 ```
 
 #### Usage Example:
 ```python
 from look_up.query_helper import LookupQueryHelper
 
-# Get lookup types query
+# Simple query (no parameters)
 types_query = LookupQueryHelper.get_lookup_types_query()
+result = db_manager.execute_query(types_query)
 
-# Get lookup values by type name
-values_query = LookupQueryHelper.get_lookup_values_by_type_name_query()
+# F-string query (no parameters needed)
+type_query = LookupQueryHelper.get_lookup_type_by_name_query("status")
+result = db_manager.execute_query(type_query)
+
+# Parameterized query (returns tuple)
+query, values = LookupQueryHelper.create_lookup_type_query(
+    name="status", description="Status values"
+)
+type_id = db_manager.execute_insert(query, values)
 ```
 
 ### 3. Display Config Query Helper (`display_config/query_helper.py`)
 
-**Purpose**: Provides raw SQL query strings for display configuration operations.
+**Purpose**: Provides raw SQL query strings with parameter binding for display configuration operations.
 
 #### DisplayConfigQueryHelper Class:
 ```python
 class DisplayConfigQueryHelper:
     @staticmethod
-    def get_headers_by_type_query():
-        # Returns raw SQL string for headers by type
+    def get_headers_for_grid_query(grid_name_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT rdc.*, gm.gridName FROM result_display_config rdc JOIN grid_metadata gm ON rdc.gridNameId = gm.gridNameId WHERE rdc.gridNameId = {grid_name_id} ORDER BY rdc.sortIndex"
     
     @staticmethod
-    def get_all_configs_query():
-        # Returns raw SQL string for all configs
+    def get_all_display_configs_query():
+        # Returns simple SQL string (no parameters)
+        return "SELECT rdc.*, gm.gridName FROM result_display_config rdc JOIN grid_metadata gm ON rdc.gridNameId = gm.gridNameId ORDER BY gm.gridName, rdc.sortIndex"
     
     @staticmethod
-    def get_config_by_id_query():
-        # Returns raw SQL string for config by ID
+    def get_display_config_by_id_query(config_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"SELECT rdc.*, gm.gridName FROM result_display_config rdc JOIN grid_metadata gm ON rdc.gridNameId = gm.gridNameId WHERE rdc.id = {config_id} LIMIT 1"
     
     @staticmethod
-    def create_config_query():
-        # Returns raw SQL string for creating config
+    def create_display_config_query(grid_name_id, display_id, title, sort_index, hidden=None, width=None, ellipsis=None, align=None, db_data_type=None, code_data_type=None, format=None):
+        # Returns parameterized query with dynamic columns
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO result_display_config ({columns_str}) VALUES ({placeholders})", values
     
     @staticmethod
-    def update_config_query():
-        # Returns raw SQL string for updating config
+    def update_display_config_query(grid_name_id, display_id, title, hidden, width, sort_index, ellipsis, align, db_data_type, code_data_type, format, config_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"UPDATE result_display_config SET gridNameId = {grid_name_id}, displayId = '{display_id}', title = '{title}', hidden = {hidden}, width = {width}, sortIndex = {sort_index}, ellipsis = {ellipsis}, align = '{align}', dbDataType = '{db_data_type}', codeDataType = '{code_data_type}', format = '{format}' WHERE id = {config_id}"
     
     @staticmethod
-    def delete_config_query():
-        # Returns raw SQL string for deleting config
+    def delete_display_config_query(config_id):
+        # Returns f-string SQL with values directly interpolated
+        return f"DELETE FROM result_display_config WHERE id = {config_id}"
+    
+    # Grid Metadata Queries
+    @staticmethod
+    def get_grid_metadata_list_query(name=None, is_active=None):
+        # Returns parameterized query with optional filters
+        # Returns tuple: (query_string, values_list)
+        return query, params
     
     @staticmethod
-    def get_distinct_types_query():
-        # Returns raw SQL string for distinct types
+    def create_grid_metadata_query(grid_name, grid_name_id, description=None, is_active=None):
+        # Returns parameterized query with dynamic columns
+        # Returns tuple: (query_string, values_list)
+        return f"INSERT INTO grid_metadata ({columns_str}) VALUES ({placeholders})", values
 ```
 
 #### Usage Example:
 ```python
 from display_config.query_helper import DisplayConfigQueryHelper
 
-# Get headers by type query
-headers_query = DisplayConfigQueryHelper.get_headers_by_type_query()
+# F-string query (no parameters needed)
+headers_query = DisplayConfigQueryHelper.get_headers_for_grid_query("user_grid")
+result = db_manager.execute_query(headers_query)
 
-# Create config query
-create_query = DisplayConfigQueryHelper.create_config_query()
+# Parameterized query (returns tuple)
+query, values = DisplayConfigQueryHelper.create_display_config_query(
+    grid_name_id="user_grid", display_id="id", title="ID", sort_index=1
+)
+config_id = db_manager.execute_insert(query, values)
+
+# Parameterized query with filters
+query, params = DisplayConfigQueryHelper.get_grid_metadata_list_query(name="user", is_active=1)
+result = db_manager.execute_query(query, params)
 ```
 
 ### 4. Integration with DAOs
@@ -1682,9 +1779,205 @@ from auth.query_helper import AuthQueryHelper
 
 class UserDAO:
     def get_user_by_id(self, user_id):
-        query = AuthQueryHelper.get_user_by_id_query()
-        result = self.db_manager.execute_query(query, (user_id,))
+        # F-string query (no parameters needed)
+        query = AuthQueryHelper.get_user_by_id_query(user_id)
+        result = self.db_manager.execute_query(query)
         # Process results...
+    
+    def create_user(self, username, email, phone=None):
+        # Parameterized query (returns tuple)
+        query, values = AuthQueryHelper.create_user_query(
+            username=username, email=email, phone=phone, 
+            is_active=True, is_admin=False, created_at=datetime.now(), updated_at=datetime.now()
+        )
+        user_id = self.db_manager.execute_insert(query, values)
+        # Process results...
+    
+    def verify_otp(self, user_id, code):
+        # F-string query with values already interpolated
+        query = AuthQueryHelper.get_latest_unused_otp_query(user_id=user_id, code=code)
+        result = self.db_manager.execute_query(query)
+        # Process results...
+```
+
+---
+
+## Coding Patterns and Standards
+
+### 1. is_active Field Pattern
+
+**Rule**: The `is_active` field is **NEVER** included in CREATE/INSERT operations and is **ALWAYS** set to `1` (active) by default in the database.
+
+#### Implementation Pattern:
+```python
+# ✅ Correct - is_active is NOT included in create operations
+def create_user_query(username, email, phone=None, is_active=None, is_admin=None, created_at=None, updated_at=None):
+    columns = ['username', 'email']  # Required fields only
+    values = [username, email]
+    
+    # Add optional fields only if they have values
+    if phone is not None:
+        columns.append('phone')
+        values.append(phone)
+    # is_active is NOT added - database default (1) will be used
+    
+    if is_admin is not None:
+        columns.append('is_admin')
+        values.append(AuthQueryHelper._convert_boolean_to_int(is_admin))
+    
+    return f"INSERT INTO users ({columns_str}) VALUES ({placeholders})", values
+
+# ❌ Incorrect - is_active should not be included in create operations
+def create_user_query(username, email, phone=None):
+    return "INSERT INTO users (username, email, phone, is_active) VALUES (%s, %s, %s, %s)", [username, email, phone, 1]
+```
+
+#### Database Schema Default:
+```sql
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    phone VARCHAR(20) NULL,
+    is_active TINYINT(1) DEFAULT 1,  -- Always defaults to 1 (active)
+    is_admin TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### 2. Logging Pattern
+
+**Rule**: Every module (DAO, Controller, Routes) includes comprehensive logging with consistent format.
+
+#### DAO Logging Pattern:
+```python
+import logging
+
+class UserDAO:
+    def create_user(self, username, email, phone=None):
+        try:
+            # Business logic
+            user_id = self.db_manager.execute_insert(query, values)
+            logging.info(f"USER_DAO: User created - user_id={user_id}, username={username}")
+            return User(id=user_id, username=username, email=email, phone=phone)
+        except Exception as e:
+            logging.error(f"USER_DAO: User creation failed - username={username}, error={str(e)}")
+            raise
+    
+    def get_user_by_id(self, user_id):
+        try:
+            result = self.db_manager.execute_query(query)
+            if result:
+                user = User.from_dict(result[0])
+                return user
+            return None
+        except Exception as e:
+            logging.error(f"USER_DAO: Error looking up user by ID - user_id={user_id}, error={str(e)}")
+            raise
+```
+
+#### Controller Logging Pattern:
+```python
+import logging
+
+class LookUpController:
+    def get_lookup_types(self):
+        try:
+            result = self.dao.get_lookup_types()
+            return result
+        except Exception as e:
+            logging.error(f"LOOKUP_CONTROLLER: Error getting lookup types - error={str(e)}")
+            raise e
+    
+    def manage_lookup_type(self, type_data):
+        try:
+            # Business logic
+            result = self.dao.update_lookup_type(existing_type.id, type_data['name'], type_data.get('description'))
+            logging.info(f"LOOKUP_CONTROLLER: Lookup type updated - name={type_data['name']}")
+            return result
+        except Exception as e:
+            logging.error(f"LOOKUP_CONTROLLER: Error managing lookup type - name={type_data.get('name', 'unknown')}, error={str(e)}")
+            raise e
+```
+
+#### Route Logging Pattern:
+```python
+import logging
+
+class AuthRoutes:
+    async def register_user(self, request: Request, user_data: UserCreate, logger: str = Query(None, include_in_schema=False)):
+        try:
+            user = self.controller.register_user(
+                username=user_data.username,
+                email=user_data.email,
+                phone=user_data.phone
+            )
+            logging.info(f"AUTH_ROUTES: User registered successfully - user_id={user.id}, username={user.username}")
+            return {"id": user.id, "username": user.username, "email": user.email, "phone": user.phone, "is_admin": user.is_admin}
+        except Exception as e:
+            logging.error(f"AUTH_ROUTES: User registration failed - username={user_data.username}, error={str(e)}")
+            raise
+```
+
+### 3. Query Helper Pattern
+
+**Rule**: Query helpers use a hybrid approach - f-string interpolation for simple queries, parameterized queries for complex operations.
+
+#### F-string Pattern (Simple Queries):
+```python
+@staticmethod
+def get_user_by_id_query(user_id):
+    return f"SELECT * FROM users WHERE id = {user_id} LIMIT 1"
+
+@staticmethod
+def get_lookup_type_by_name_query(name):
+    return f"SELECT * FROM lookup_types WHERE name = '{name}' LIMIT 1"
+```
+
+#### Parameterized Pattern (Complex Queries):
+```python
+@staticmethod
+def create_user_query(username, email, phone=None, is_active=None, is_admin=None, created_at=None, updated_at=None):
+    columns = ['username', 'email']
+    values = [username, email]
+    
+    if phone is not None:
+        columns.append('phone')
+        values.append(phone)
+    if is_admin is not None:
+        columns.append('is_admin')
+        values.append(AuthQueryHelper._convert_boolean_to_int(is_admin))
+    if created_at is not None:
+        columns.append('created_at')
+        values.append(created_at)
+    if updated_at is not None:
+        columns.append('updated_at')
+        values.append(updated_at)
+    
+    placeholders = ', '.join(['%s'] * len(values))
+    columns_str = ', '.join(columns)
+    
+    return f"INSERT INTO users ({columns_str}) VALUES ({placeholders})", values
+```
+
+### 4. Error Handling Pattern
+
+**Rule**: All methods include try-catch blocks with specific error logging and re-raising.
+
+```python
+def some_method(self, param1, param2):
+    try:
+        # Business logic
+        result = self.perform_operation(param1, param2)
+        logging.info(f"CLASS_NAME: Operation successful - param1={param1}, result={result}")
+        return result
+    except ValueError as e:
+        logging.error(f"CLASS_NAME: Validation error - param1={param1}, error={str(e)}")
+        raise
+    except Exception as e:
+        logging.error(f"CLASS_NAME: Unexpected error - param1={param1}, error={str(e)}")
+        raise
 ```
 
 ---
@@ -2730,8 +3023,18 @@ from auth.query_helper import AuthQueryHelper
 
 class UserDAO:
     def get_user_by_id(self, user_id):
-        query = AuthQueryHelper.get_user_by_id_query()
-        result = self.db_manager.execute_query(query, (user_id,))
+        # F-string query (no parameters needed)
+        query = AuthQueryHelper.get_user_by_id_query(user_id)
+        result = self.db_manager.execute_query(query)
+        # Process results...
+    
+    def create_user(self, username, email, phone=None):
+        # Parameterized query (returns tuple)
+        query, values = AuthQueryHelper.create_user_query(
+            username=username, email=email, phone=phone, 
+            is_active=True, is_admin=False, created_at=datetime.now(), updated_at=datetime.now()
+        )
+        user_id = self.db_manager.execute_insert(query, values)
         # Process results...
 ```
 
@@ -2740,67 +3043,171 @@ class UserDAO:
 # products/query_helper.py
 class ProductQueryHelper:
     @staticmethod
-    def create_product_query():
-        return "INSERT INTO products (name, description, price) VALUES (%s, %s, %s)"
+    def create_product_query(name, description, price, category_id=None, is_active=None, created_at=None, updated_at=None):
+        # Parameterized query with dynamic columns
+        columns = ['name', 'description', 'price']
+        values = [name, description, price]
+        
+        if category_id is not None:
+            columns.append('category_id')
+            values.append(category_id)
+        # is_active is NOT included - database default (1) will be used
+        
+        if created_at is not None:
+            columns.append('created_at')
+            values.append(created_at)
+        if updated_at is not None:
+            columns.append('updated_at')
+            values.append(updated_at)
+        
+        placeholders = ', '.join(['%s'] * len(values))
+        columns_str = ', '.join(columns)
+        
+        return f"INSERT INTO products ({columns_str}) VALUES ({placeholders})", values
     
     @staticmethod
-    def get_product_by_id_query():
-        return "SELECT * FROM products WHERE id = %s LIMIT 1"
+    def get_product_by_id_query(product_id):
+        # F-string query (no parameters needed)
+        return f"SELECT * FROM products WHERE id = {product_id} LIMIT 1"
 ```
 
 ### 5. Error Handling
 
-**Handle database errors gracefully**:
+**Handle database errors gracefully with comprehensive logging**:
 ```python
-try:
-    result = self.db_manager.execute_query(query, params)
-    return [Model.from_dict(row) for row in result]
-except Exception as e:
-    logging.error(f"Database error in {self.__class__.__name__}: {e}")
-    return []
-```
+def get_user_by_id(self, user_id):
+    try:
+        query = AuthQueryHelper.get_user_by_id_query(user_id)
+        result = self.db_manager.execute_query(query)
+        if result:
+            user = User.from_dict(result[0])
+            return user
+        return None
+    except Exception as e:
+        logging.error(f"USER_DAO: Error looking up user by ID - user_id={user_id}, error={str(e)}")
+        raise
 
-**Validate input data**:
-```python
 def create_user(self, username, email, phone=None):
-    # Validate input
-    if not username or len(username.strip()) < 2:
-        raise ValueError("Username must be at least 2 characters")
-    
-    if not email or '@' not in email:
-        raise ValueError("Invalid email format")
-    
-    # Proceed with database operation
-    # ...
+    try:
+        # Validate input
+        if not username or len(username.strip()) < 2:
+            raise ValueError("Username must be at least 2 characters")
+        
+        if not email or '@' not in email:
+            raise ValueError("Invalid email format")
+        
+        # Proceed with database operation
+        query, values = AuthQueryHelper.create_user_query(
+            username=username, email=email, phone=phone, 
+            is_active=True, is_admin=False, created_at=datetime.now(), updated_at=datetime.now()
+        )
+        user_id = self.db_manager.execute_insert(query, values)
+        logging.info(f"USER_DAO: User created - user_id={user_id}, username={username}")
+        return User(id=user_id, username=username, email=email, phone=phone)
+    except ValueError as e:
+        logging.error(f"USER_DAO: Validation error - username={username}, error={str(e)}")
+        raise
+    except Exception as e:
+        logging.error(f"USER_DAO: User creation failed - username={username}, error={str(e)}")
+        raise
 ```
 
 ### 6. Logging
 
-**Use appropriate log levels**:
+**Use appropriate log levels with consistent format**:
 ```python
 import logging
 
-# Debug information
+# Debug information (rarely used in production)
 logging.debug(f"Executing query: {query} with params: {params}")
 
-# General information
-logging.info(f"User {user_id} created successfully")
+# General information (successful operations)
+logging.info(f"USER_DAO: User created - user_id={user_id}, username={username}")
 
-# Warnings
-logging.warning(f"User {user_id} not found")
+# Warnings (non-critical issues)
+logging.warning(f"USER_DAO: User not found - user_id={user_id}")
 
-# Errors
-logging.error(f"Failed to create user: {e}")
+# Errors (exceptions and failures)
+logging.error(f"USER_DAO: User creation failed - username={username}, error={str(e)}")
 ```
 
-**Include context in log messages**:
+**Include context in log messages with consistent format**:
 ```python
-# ✅ Good
-logging.info(f"UserDAO.create_user: Created user {username} with ID {user_id}")
+# ✅ Good - Consistent format: CLASS_NAME: Action - key=value, key=value
+logging.info(f"USER_DAO: User created - user_id={user_id}, username={username}")
+logging.error(f"LOOKUP_CONTROLLER: Error getting lookup types - error={str(e)}")
+logging.info(f"AUTH_ROUTES: User registered successfully - user_id={user.id}, username={user.username}")
 
-# ❌ Bad
+# ❌ Bad - Inconsistent format
 logging.info("User created")
+logging.error("Error occurred")
+logging.info(f"Created user {username}")
 ```
+
+**Logging Pattern for All Modules**:
+```python
+# DAO Layer
+logging.info(f"MODULE_DAO: Operation successful - key1={value1}, key2={value2}")
+logging.error(f"MODULE_DAO: Operation failed - key1={value1}, error={str(e)}")
+
+# Controller Layer  
+logging.info(f"MODULE_CONTROLLER: Business logic completed - key1={value1}")
+logging.error(f"MODULE_CONTROLLER: Business logic failed - key1={value1}, error={str(e)}")
+
+# Routes Layer
+logging.info(f"MODULE_ROUTES: API call successful - key1={value1}")
+logging.error(f"MODULE_ROUTES: API call failed - key1={value1}, error={str(e)}")
+```
+
+---
+
+## Current API Endpoints
+
+### Authentication Module (`/auth`)
+- **POST** `/auth/register` - Register a new user
+- **POST** `/auth/otp/request` - Request OTP for login
+- **POST** `/auth/otp/verify` - Verify OTP and get JWT token
+- **GET** `/auth/me` - Get current user profile (JWT required)
+
+### Lookup Services Module (`/lookup`)
+- **GET** `/lookup/types` - Get all lookup types
+- **POST** `/lookup/values` - Get lookup values by type
+- **POST** `/lookup/types/manage` - Create/update lookup type (JWT required)
+- **POST** `/lookup/values/manage` - Create/update lookup values (JWT required)
+
+### Display Configuration Module (`/display-config`)
+- **POST** `/display-config/grid-metadata/create` - Create grid metadata (JWT required)
+- **POST** `/display-config/grid-metadata/list` - List grid metadata with filters
+- **POST** `/display-config/grid-metadata/edit` - Update grid metadata (JWT required)
+- **POST** `/display-config/result-display-config/list` - List display configs by grid
+- **POST** `/display-config/result-display-config/update` - Update display configs (JWT required)
+
+### RBAC Module (`/rbac`)
+- **POST** `/rbac/roles` - Create role (JWT required)
+- **GET** `/rbac/roles` - List roles with filters (JWT required)
+- **POST** `/rbac/roles/edit` - Update role (JWT required)
+- **POST** `/rbac/rights` - Create right (JWT required)
+- **GET** `/rbac/rights` - List rights with filters (JWT required)
+- **POST** `/rbac/rights/edit` - Update right (JWT required)
+- **GET** `/rbac/role-rights/{role_id}` - Get role rights (JWT required)
+- **POST** `/rbac/role-rights/manage` - Manage role rights (JWT required)
+- **GET** `/rbac/user-rights/{user_id}` - Get user UI rights (JWT required)
+- **POST** `/rbac/user-api-access` - Check user API access (JWT required)
+
+### Health Check (`/healthCheck`)
+- **GET** `/healthCheck` - Application health status
+
+### Key Features Implemented
+1. **OTP-based Authentication** - No password system, uses OTP for secure login
+2. **JWT Token Management** - Secure token-based authentication with expiration
+3. **Role-Based Access Control** - Complete RBAC system with roles, rights, and permissions
+4. **Module-based Architecture** - Each feature is a self-contained module
+5. **Dynamic Display Configuration** - Configurable grid and result display settings
+6. **Centralized Lookup Management** - Key-value pair management for dropdowns/selects
+7. **Database Migration System** - Version-controlled schema changes
+8. **Connection Pooling** - Efficient database connection management
+9. **Comprehensive Logging** - Detailed logging throughout the application
+10. **Error Handling** - Standardized error responses and exception handling
 
 ---
 

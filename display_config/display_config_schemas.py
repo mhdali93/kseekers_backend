@@ -6,7 +6,6 @@ class GridMetadataCreate(BaseModel):
     gridName: str
     gridNameId: str
     description: Optional[str] = None
-    is_active: int = 1
 
 class GridMetadataUpdate(BaseModel):
     id: int

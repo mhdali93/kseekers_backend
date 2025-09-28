@@ -5,25 +5,25 @@ from fastapi import HTTPException
 from models.enums import ExceptionMessage, HTTPStatus
 
 
-class AWSConnectionException(Exception):
-    def __init__(self, obj, message=ExceptionMessage.aws_connecion_error.value):
-        self.object = obj
-        self.message = message
-        super().__init__(self.message)
+# class AWSConnectionException(Exception):
+#     def __init__(self, obj, message=ExceptionMessage.aws_connecion_error.value):
+#         self.object = obj
+#         self.message = message
+#         super().__init__(self.message)
 
 
-class AWSS3WriteException(Exception):
-    def __init__(self, obj, message=ExceptionMessage.aws_s3_write_exception.value):
-        self.object = obj
-        self.message = message
-        super().__init__(self.message)
+# class AWSS3WriteException(Exception):
+#     def __init__(self, obj, message=ExceptionMessage.aws_s3_write_exception.value):
+#         self.object = obj
+#         self.message = message
+#         super().__init__(self.message)
 
 
-class AWSS3PresignedURLException(Exception):
-    def __init__(self, obj, message=ExceptionMessage.aws_s3_download_exception.value):
-        self.object = obj
-        self.message = message
-        super().__init__(self.message)
+# class AWSS3PresignedURLException(Exception):
+#     def __init__(self, obj, message=ExceptionMessage.aws_s3_download_exception.value):
+#         self.object = obj
+#         self.message = message
+#         super().__init__(self.message)
 
 
 class DBConnectionException(Exception):

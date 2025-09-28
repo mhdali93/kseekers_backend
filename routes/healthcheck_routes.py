@@ -1,9 +1,6 @@
 from fastapi import APIRouter
 
 class HealthCheckRoutes:
-    application = app = {}
-    sl_controller = {}
-
     def __init__(self):
         self.app = APIRouter()
         self.application = self.app

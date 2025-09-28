@@ -244,77 +244,169 @@ class ProductSearchRequest(BaseModel):
 ### Step 6: Create Query Helper File
 
 **File: `products/query_helper.py`**
+
+The query helper follows a **hybrid pattern** based on the RBAC module:
+
+#### Query Pattern Guidelines:
+
+1. **F-string queries** for simple SELECT operations (single parameter):
+   ```python
+   def get_entity_by_id_query(entity_id=None):
+       return f"SELECT * FROM entities WHERE id = {entity_id} LIMIT 1"
+   ```
+
+2. **Parameterized queries (tuples)** for INSERT/UPDATE operations with dynamic columns:
+   ```python
+   def create_entity_query(field1=None, field2=None, is_active=None):
+       # Build dynamic columns and values
+       return f"INSERT INTO entities ({columns_str}) VALUES ({placeholders})", values
+   ```
+
+3. **Base queries with dynamic filtering** for complex SELECT operations (RBAC pattern):
+   ```python
+   def list_entities_query():
+       return "SELECT * FROM entities WHERE 1=1"
+   
+   # In DAO: Add filters dynamically
+   if name:
+       query += " AND name LIKE %s"
+       params.append(f"%{name}%")
+   ```
+
 ```python
 class ProductQueryHelper:
-    """Query helper for product-related database operations"""
+    """Query helper for products module - Raw SQL queries"""
     
     @staticmethod
-    def create_product_query():
-        """Returns SQL query for creating a new product"""
-        return """
-            INSERT INTO products (name, description, price, category_id, sku, is_active, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
+    def _convert_boolean_to_int(value):
+        """Convert boolean values to integers for database storage"""
+        if isinstance(value, bool):
+            return 1 if value else 0
+        return value
     
     @staticmethod
-    def get_product_by_id_query():
-        """Returns SQL query for getting product by ID"""
-        return "SELECT * FROM products WHERE id = %s LIMIT 1"
+    def create_product_query(name, description, price, category_id=None, sku=None, is_active=None, created_at=None, updated_at=None):
+        """Get SQL query to create a new product with parameterized values"""
+        if name is None:
+            raise ValueError("name is required for create_product_query")
+        if description is None:
+            raise ValueError("description is required for create_product_query")
+        if price is None:
+            raise ValueError("price is required for create_product_query")
+        
+        # Build dynamic column and value lists, skipping None values for columns with defaults
+        columns = ['name', 'description', 'price']
+        values = [name, description, price]
+        
+        # Add optional columns only if they have values (skip None to use DB defaults)
+        if category_id is not None:
+            columns.append('category_id')
+            values.append(category_id)
+        if sku is not None:
+            columns.append('sku')
+            values.append(sku)
+        # is_active is NEVER included in CREATE operations - database default (1) will be used
+        # This follows the established pattern: is_active should never be part of create API or insert statements
+        
+        if created_at is not None:
+            columns.append('created_at')
+            values.append(created_at)
+        if updated_at is not None:
+            columns.append('updated_at')
+            values.append(updated_at)
+        
+        # Create parameterized query for complex operations
+        placeholders = ', '.join(['%s'] * len(values))
+        columns_str = ', '.join(columns)
+        
+        return f"INSERT INTO products ({columns_str}) VALUES ({placeholders})", values
+    
+    @staticmethod
+    def get_product_by_id_query(product_id):
+        """Get SQL query for product by ID with values formatted"""
+        if product_id is None:
+            raise ValueError("product_id is required for get_product_by_id_query")
+        
+        return f"SELECT * FROM products WHERE id = {product_id} LIMIT 1"
     
     @staticmethod
     def get_all_products_query():
-        """Returns SQL query for getting all products"""
+        """Get SQL query for all products"""
+        return "SELECT * FROM products WHERE is_active = 1 ORDER BY name"
+    
+    @staticmethod
+    def get_products_by_category_query(category_id):
+        """Get SQL query for products by category with values formatted"""
+        if category_id is None:
+            raise ValueError("category_id is required for get_products_by_category_query")
+        
+        return f"SELECT * FROM products WHERE category_id = {category_id} AND is_active = 1 ORDER BY name"
+    
+    @staticmethod
+    def search_products_query(query, category_id=None, min_price=None, max_price=None):
+        """Get SQL query for searching products with values formatted"""
+        if query is None:
+            raise ValueError("query is required for search_products_query")
+        
+        sql = f"SELECT * FROM products WHERE is_active = 1 AND (name LIKE '%{query}%' OR description LIKE '%{query}%')"
+        
+        if category_id is not None:
+            sql += f" AND category_id = {category_id}"
+        if min_price is not None:
+            sql += f" AND price >= {min_price}"
+        if max_price is not None:
+            sql += f" AND price <= {max_price}"
+        
+        sql += " ORDER BY name"
+        return sql
+    
+    @staticmethod
+    def update_product_query(name, description, price, category_id, sku, is_active, product_id):
+        """Get SQL query to update product with values formatted"""
+        if name is None:
+            raise ValueError("name is required for update_product_query")
+        if description is None:
+            raise ValueError("description is required for update_product_query")
+        if price is None:
+            raise ValueError("price is required for update_product_query")
+        if is_active is None:
+            raise ValueError("is_active is required for update_product_query")
+        if product_id is None:
+            raise ValueError("product_id is required for update_product_query")
+        
+        return f"UPDATE products SET name = '{name}', description = '{description}', price = {price}, category_id = {category_id}, sku = '{sku}', is_active = {is_active} WHERE id = {product_id}"
+    
+    @staticmethod
+    def delete_product_query(product_id):
+        """Get SQL query to delete product (soft delete) with values formatted"""
+        if product_id is None:
+            raise ValueError("product_id is required for delete_product_query")
+        
+        return f"UPDATE products SET is_active = 0, updated_at = NOW() WHERE id = {product_id}"
+    
+    @staticmethod
+    def get_product_by_sku_query(sku=None):
+        """Returns SQL query for getting product by SKU with values formatted"""
+        if sku is None:
+            raise ValueError("sku is required for get_product_by_sku_query")
+        
+        return f"SELECT * FROM products WHERE sku = '{sku}' LIMIT 1"
+    
+    @staticmethod
+    def check_sku_exists_query(sku=None, exclude_id=None):
+        """Returns SQL query for checking if SKU exists with values formatted"""
+        if sku is None:
+            raise ValueError("sku is required for check_sku_exists_query")
+        
+        return f"SELECT COUNT(*) as count FROM products WHERE sku = '{sku}' AND id != {exclude_id or 0}"
+    
+    @staticmethod
+    def search_products_advanced_query():
+        """Returns base SQL query for advanced product search with dynamic filtering"""
         return """
             SELECT * FROM products 
-            WHERE is_active = 1 
-            ORDER BY name
+            WHERE is_active = 1
         """
-    
-    @staticmethod
-    def get_products_by_category_query():
-        """Returns SQL query for getting products by category"""
-        return """
-            SELECT * FROM products 
-            WHERE category_id = %s AND is_active = 1
-            ORDER BY name
-        """
-    
-    @staticmethod
-    def search_products_query():
-        """Returns SQL query for searching products"""
-        return """
-            SELECT * FROM products 
-            WHERE is_active = 1 
-            AND (name LIKE %s OR description LIKE %s)
-            AND (%s IS NULL OR category_id = %s)
-            AND (%s IS NULL OR price >= %s)
-            AND (%s IS NULL OR price <= %s)
-            ORDER BY name
-        """
-    
-    @staticmethod
-    def update_product_query(set_clauses):
-        """Returns SQL query for updating product"""
-        return f"""
-            UPDATE products 
-            SET {', '.join(set_clauses)}, updated_at = %s
-            WHERE id = %s
-        """
-    
-    @staticmethod
-    def delete_product_query():
-        """Returns SQL query for soft deleting product"""
-        return "UPDATE products SET is_active = 0, updated_at = %s WHERE id = %s"
-    
-    @staticmethod
-    def get_product_by_sku_query():
-        """Returns SQL query for getting product by SKU"""
-        return "SELECT * FROM products WHERE sku = %s LIMIT 1"
-    
-    @staticmethod
-    def check_sku_exists_query():
-        """Returns SQL query for checking if SKU exists"""
-        return "SELECT COUNT(*) as count FROM products WHERE sku = %s AND id != %s"
 ```
 
 ### Step 7: Create DAO File
@@ -336,29 +428,32 @@ class ProductDAO:
     def create_product(self, name, description, price, category_id=None, sku=None):
         """Create a new product"""
         try:
-            query = ProductQueryHelper.create_product_query()
-            now = datetime.now()
-            product_id = self.db_manager.execute_insert(query, (
-                name, description, price, category_id, sku, True, now, now
-            ))
+            query, values = ProductQueryHelper.create_product_query(
+                name=name, description=description, price=price, 
+                category_id=category_id, sku=sku, 
+                created_at=datetime.now(), updated_at=datetime.now()
+            )
+            product_id = self.db_manager.execute_insert(query, values)
+            logging.info(f"PRODUCT_DAO: Product created - product_id={product_id}, name={name}")
             
             return Product(id=product_id, name=name, description=description, 
                           price=price, category_id=category_id, sku=sku)
         except Exception as e:
-            logging.error(f"Error creating product: {e}")
+            logging.error(f"PRODUCT_DAO: Product creation failed - name={name}, error={str(e)}")
             raise
     
     def get_product_by_id(self, product_id):
         """Get product by ID"""
         try:
-            query = ProductQueryHelper.get_product_by_id_query()
-            result = self.db_manager.execute_query(query, (product_id,))
+            query = ProductQueryHelper.get_product_by_id_query(product_id)
+            result = self.db_manager.execute_query(query)
             
             if result:
-                return Product.from_dict(result[0])
+                product = Product.from_dict(result[0])
+                return product
             return None
         except Exception as e:
-            logging.error(f"Error getting product by ID {product_id}: {e}")
+            logging.error(f"PRODUCT_DAO: Error looking up product by ID - product_id={product_id}, error={str(e)}")
             raise
     
     def get_all_products(self):
@@ -369,95 +464,111 @@ class ProductDAO:
             
             return [Product.from_dict(row) for row in results]
         except Exception as e:
-            logging.error(f"Error getting all products: {e}")
+            logging.error(f"PRODUCT_DAO: Error getting all products - error={str(e)}")
             raise
     
     def get_products_by_category(self, category_id):
         """Get products by category"""
         try:
-            query = ProductQueryHelper.get_products_by_category_query()
-            results = self.db_manager.execute_query(query, (category_id,))
+            query = ProductQueryHelper.get_products_by_category_query(category_id)
+            results = self.db_manager.execute_query(query)
             
             return [Product.from_dict(row) for row in results]
         except Exception as e:
-            logging.error(f"Error getting products by category {category_id}: {e}")
+            logging.error(f"PRODUCT_DAO: Error getting products by category - category_id={category_id}, error={str(e)}")
             raise
     
     def search_products(self, query_text, category_id=None, min_price=None, max_price=None):
         """Search products with filters"""
         try:
-            query = ProductQueryHelper.search_products_query()
-            search_pattern = f"%{query_text}%"
-            
-            results = self.db_manager.execute_query(query, (
-                search_pattern, search_pattern,  # name and description LIKE
-                category_id, category_id,        # category filter
-                min_price, min_price,           # min price filter
-                max_price, max_price            # max price filter
-            ))
+            query = ProductQueryHelper.search_products_query(
+                query=query_text, category_id=category_id, 
+                min_price=min_price, max_price=max_price
+            )
+            results = self.db_manager.execute_query(query)
             
             return [Product.from_dict(row) for row in results]
         except Exception as e:
-            logging.error(f"Error searching products: {e}")
+            logging.error(f"PRODUCT_DAO: Error searching products - query={query_text}, error={str(e)}")
             raise
     
-    def update_product(self, product_id, **kwargs):
-        """Update product fields"""
+    def search_products_advanced(self, name=None, category_id=None, min_price=None, max_price=None, is_active=None):
+        """Advanced product search with dynamic filtering (RBAC pattern)"""
         try:
-            if not kwargs:
-                return False
-            
-            set_clauses = []
+            query = ProductQueryHelper.search_products_advanced_query()
             params = []
             
-            for field, value in kwargs.items():
-                if field in ['name', 'description', 'price', 'category_id', 'sku', 'is_active']:
-                    set_clauses.append(f"{field} = %s")
-                    params.append(value)
+            if name:
+                query += " AND name LIKE %s"
+                params.append(f"%{name}%")
             
-            if not set_clauses:
-                return False
+            if category_id is not None:
+                query += " AND category_id = %s"
+                params.append(category_id)
             
-            params.append(datetime.now())  # updated_at
-            params.append(product_id)      # WHERE id = ?
+            if min_price is not None:
+                query += " AND price >= %s"
+                params.append(min_price)
             
-            query = ProductQueryHelper.update_product_query(set_clauses)
-            rows_affected = self.db_manager.execute_update(query, params)
+            if max_price is not None:
+                query += " AND price <= %s"
+                params.append(max_price)
+            
+            if is_active is not None:
+                query += " AND is_active = %s"
+                params.append(is_active)
+            
+            query += " ORDER BY name"
+            
+            results = self.db_manager.execute_query(query, params)
+            return [Product.from_dict(row) for row in results]
+        except Exception as e:
+            logging.error(f"PRODUCT_DAO: Error in advanced search - error={str(e)}")
+            raise
+    
+    def update_product(self, product_id, name, description, price, category_id, sku, is_active):
+        """Update product fields"""
+        try:
+            query = ProductQueryHelper.update_product_query(
+                name=name, description=description, price=price, 
+                category_id=category_id, sku=sku, is_active=is_active, product_id=product_id
+            )
+            rows_affected = self.db_manager.execute_update(query)
+            logging.info(f"PRODUCT_DAO: Product updated - product_id={product_id}, rows_affected={rows_affected}")
             return rows_affected > 0
         except Exception as e:
-            logging.error(f"Error updating product {product_id}: {e}")
+            logging.error(f"PRODUCT_DAO: Error updating product - product_id={product_id}, error={str(e)}")
             raise
     
     def delete_product(self, product_id):
         """Soft delete product (set is_active = 0)"""
         try:
-            query = ProductQueryHelper.delete_product_query()
-            now = datetime.now()
-            rows_affected = self.db_manager.execute_update(query, (now, product_id))
+            query = ProductQueryHelper.delete_product_query(product_id)
+            rows_affected = self.db_manager.execute_update(query)
+            logging.info(f"PRODUCT_DAO: Product deleted - product_id={product_id}, rows_affected={rows_affected}")
             return rows_affected > 0
         except Exception as e:
-            logging.error(f"Error deleting product {product_id}: {e}")
+            logging.error(f"PRODUCT_DAO: Error deleting product - product_id={product_id}, error={str(e)}")
             raise
     
     def get_product_by_sku(self, sku):
         """Get product by SKU"""
         try:
-            query = ProductQueryHelper.get_product_by_sku_query()
-            result = self.db_manager.execute_query(query, (sku,))
+            query = ProductQueryHelper.get_product_by_sku_query(sku=sku)
+            result = self.db_manager.execute_query(query)
             
             if result:
                 return Product.from_dict(result[0])
             return None
         except Exception as e:
-            logging.error(f"Error getting product by SKU {sku}: {e}")
+            logging.error(f"PRODUCT_DAO: Error getting product by SKU - sku={sku}, error={str(e)}")
             raise
     
     def check_sku_exists(self, sku, exclude_id=None):
         """Check if SKU already exists"""
         try:
-            query = ProductQueryHelper.check_sku_exists_query()
-            exclude_id = exclude_id or 0
-            result = self.db_manager.execute_query(query, (sku, exclude_id))
+            query = ProductQueryHelper.check_sku_exists_query(sku=sku, exclude_id=exclude_id or 0)
+            result = self.db_manager.execute_query(query)
             
             return result[0]['count'] > 0 if result else False
         except Exception as e:
@@ -1281,21 +1392,58 @@ except Exception as e:
     )
 ```
 
-### 4. Query Helper Pattern
+### 4. Query Helper Pattern (Hybrid Approach)
+
+The query helper uses a **hybrid pattern** based on the RBAC module:
 
 ```python
 class EntityQueryHelper:
     @staticmethod
-    def create_entity_query():
-        return "INSERT INTO entities (field1, field2) VALUES (%s, %s)"
+    def _convert_boolean_to_int(value):
+        """Convert boolean values to integers for database storage"""
+        if isinstance(value, bool):
+            return 1 if value else 0
+        return value
     
+    # F-string queries for simple SELECT operations
     @staticmethod
-    def get_entity_by_id_query():
-        return "SELECT * FROM entities WHERE id = %s LIMIT 1"
+    def get_entity_by_id_query(entity_id=None):
+        """Returns SQL query for getting entity by ID with values formatted"""
+        if entity_id is None:
+            raise ValueError("entity_id is required for get_entity_by_id_query")
+        
+        return f"SELECT * FROM entities WHERE id = {entity_id} LIMIT 1"
     
+    # Parameterized queries for INSERT/UPDATE operations with dynamic columns
     @staticmethod
-    def update_entity_query(set_clauses):
-        return f"UPDATE entities SET {', '.join(set_clauses)} WHERE id = %s"
+    def create_entity_query(field1=None, field2=None, is_active=None, created_at=None):
+        """Returns SQL query for creating entity with parameterized values"""
+        if field1 is None:
+            raise ValueError("field1 is required for create_entity_query")
+        
+        columns = ['field1']
+        values = [field1]
+        
+        if field2 is not None:
+            columns.append('field2')
+            values.append(field2)
+        if is_active is not None:
+            columns.append('is_active')
+            values.append(EntityQueryHelper._convert_boolean_to_int(is_active))
+        if created_at is not None:
+            columns.append('created_at')
+            values.append(created_at)
+        
+        placeholders = ', '.join(['%s'] * len(values))
+        columns_str = ', '.join(columns)
+        
+        return f"INSERT INTO entities ({columns_str}) VALUES ({placeholders})", values
+    
+    # Base queries for dynamic filtering (RBAC pattern)
+    @staticmethod
+    def list_entities_query():
+        """Returns base SQL query for listing entities with dynamic filtering"""
+        return "SELECT * FROM entities WHERE 1=1"
 ```
 ---
 
@@ -1461,6 +1609,7 @@ mysql -u root -p -e "USE kseekers; SELECT * FROM products LIMIT 5;"
 - **Implement soft deletes**: Use `is_active` flags instead of hard deletes
 - **Add audit fields**: Include `created_at` and `updated_at` timestamps
 - **Use foreign keys**: Maintain referential integrity
+- **Follow is_active pattern**: Never include `is_active` in CREATE operations - always use database default (1)
 
 ### 3. API Design
 
@@ -1476,21 +1625,43 @@ mysql -u root -p -e "USE kseekers; SELECT * FROM products LIMIT 5;"
 - **Use parameterized queries**: Prevent SQL injection attacks
 - **Implement rate limiting**: Protect against abuse and DoS attacks
 
-### 5. Performance
+### 5. Logging Pattern
+
+Every module follows a consistent logging pattern:
+
+- **DAO Layer**: Log database operations with context
+  ```python
+  logging.info(f"MODULE_DAO: Operation completed - key={value}")
+  logging.error(f"MODULE_DAO: Operation failed - key={value}, error={str(e)}")
+  ```
+
+- **Controller Layer**: Log business logic operations
+  ```python
+  logging.info(f"MODULE_CONTROLLER: Business operation - key={value}")
+  logging.error(f"MODULE_CONTROLLER: Business operation failed - key={value}, error={str(e)}")
+  ```
+
+- **Routes Layer**: Log API requests and responses
+  ```python
+  logging.info(f"MODULE_ROUTES: API operation completed - key={value}")
+  logging.error(f"MODULE_ROUTES: API operation failed - key={value}, error={str(e)}")
+  ```
+
+### 6. Performance
 
 - **Use connection pooling**: Efficiently manage database connections
 - **Implement caching**: Cache frequently accessed data
 - **Optimize queries**: Use proper indexes and query patterns
 - **Monitor performance**: Track response times and resource usage
 
-### 6. Testing
+### 7. Testing
 
 - **Write unit tests**: Test individual components in isolation
 - **Write integration tests**: Test component interactions
 - **Test error scenarios**: Ensure proper error handling
 - **Use test data**: Create realistic test datasets
 
-### 7. Documentation
+### 8. Documentation
 
 - **Document APIs**: Use clear, comprehensive API documentation
 - **Add code comments**: Explain complex business logic

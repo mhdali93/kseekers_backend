@@ -1,4 +1,5 @@
 import time
+import logging
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from utils.decorator import DecoratorUtils
 from logical.logger import log_request, update_log
@@ -107,12 +108,17 @@ class RBACRoutes:
                           token: str = Query(None, include_in_schema=False),
                           logger: str = Query(None, include_in_schema=False)):
         """Create a new role"""
-        return self.controller.create_role(
-            name=role_data.name,
-            display_name=role_data.display_name,
-            description=role_data.description,
-            is_active=role_data.is_active
-        )
+        try:
+            result = self.controller.create_role(
+                name=role_data.name,
+                display_name=role_data.display_name,
+                description=role_data.description
+            )
+            logging.info(f"RBAC_ROUTES: Role created - name={role_data.name}")
+            return result
+        except Exception as e:
+            logging.error(f"RBAC_ROUTES: Role creation failed - name={role_data.name}, error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Roles retrieved successfully",
@@ -135,9 +141,15 @@ class RBACRoutes:
                        token: str = Query(None, include_in_schema=False),
                        logger: str = Query(None, include_in_schema=False)):
         """Edit role (name, display_name, description, is_active)"""
-        role_id = role_data.id
-        update_data = {k: v for k, v in role_data.dict().items() if k != 'id' and v is not None}
-        return self.controller.edit_role(role_id, **update_data)
+        try:
+            role_id = role_data.id
+            update_data = {k: v for k, v in role_data.dict().items() if k != 'id' and v is not None}
+            result = self.controller.edit_role(role_id, **update_data)
+            logging.info(f"RBAC_ROUTES: Role updated - id={role_id}")
+            return result
+        except Exception as e:
+            logging.error(f"RBAC_ROUTES: Role update failed - id={role_data.id}, error={str(e)}")
+            raise
     
     # 4. Right Management Endpoints
     @DecoratorUtils.create_endpoint(
@@ -208,9 +220,15 @@ class RBACRoutes:
                                 token: str = Query(None, include_in_schema=False),
                                 logger: str = Query(None, include_in_schema=False)):
         """Manage role rights - add missing, remove extra"""
-        # Extract granted_by from request state (set by JWT authentication)
-        granted_by = getattr(request.state, "user_id", None)
-        return self.controller.manage_role_rights(rights_data.role_id, rights_data.right_ids, granted_by)
+        try:
+            # Extract granted_by from request state (set by JWT authentication)
+            granted_by = getattr(request.state, "user_id", None)
+            result = self.controller.manage_role_rights(rights_data.role_id, rights_data.right_ids, granted_by)
+            logging.info(f"RBAC_ROUTES: Role rights managed - role_id={rights_data.role_id}, added={result['added']}, removed={result['removed']}")
+            return result
+        except Exception as e:
+            logging.error(f"RBAC_ROUTES: Role rights management failed - role_id={rights_data.role_id}, error={str(e)}")
+            raise
     
     # 9. Misc Endpoints
     @DecoratorUtils.create_endpoint(

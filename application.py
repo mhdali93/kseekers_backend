@@ -1,6 +1,6 @@
 import uvicorn
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.exceptions import RequestValidationError
 import config
 
@@ -61,11 +61,19 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-app.include_router(HealthCheckRoutes().app, tags=["HEALTH CHECK"])
-app.include_router(LookUpRoutes().app)
-app.include_router(AuthRoutes().app)
-app.include_router(DisplayConfigRoutes().app)
-app.include_router(RBACRoutes().app)
+# Initialize route instances
+health_routes = HealthCheckRoutes()
+lookup_routes = LookUpRoutes()
+auth_routes = AuthRoutes()
+display_config_routes = DisplayConfigRoutes()
+rbac_routes = RBACRoutes()
+
+# Include routers
+app.include_router(health_routes.app, tags=["HEALTH CHECK"])
+app.include_router(lookup_routes.app)
+app.include_router(auth_routes.app)
+app.include_router(display_config_routes.app)
+app.include_router(rbac_routes.app)
 
 
 if __name__ == "__main__":
