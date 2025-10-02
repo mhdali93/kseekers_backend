@@ -1,6 +1,9 @@
 -- Initial Database Schema for KSeekers
 -- This migration creates all necessary tables and sample data
 
+-- Start transaction
+START TRANSACTION;
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -122,3 +125,6 @@ INSERT INTO lookup_values (lookup_type_id, code, value, description, is_active, 
 ((SELECT id FROM lookup_types WHERE name = 'document_types'), 'xls', 'Excel Spreadsheet', 'Microsoft Excel Spreadsheet', 1, 3),
 ((SELECT id FROM lookup_types WHERE name = 'document_types'), 'img', 'Image File', 'Image file (JPG, PNG, etc.)', 1, 4)
 ON DUPLICATE KEY UPDATE code = VALUES(code);
+
+-- Commit transaction
+COMMIT;

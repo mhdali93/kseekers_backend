@@ -3,6 +3,9 @@
 -- Created: 2024-12-01T15:00:00
 -- Description: Create comprehensive RBAC system with roles, rights, user-role, and role-right tables
 
+-- Start transaction
+START TRANSACTION;
+
 -- Step 1: Create roles table
 CREATE TABLE IF NOT EXISTS roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -116,3 +119,6 @@ ALTER TABLE roles COMMENT = 'System roles for RBAC';
 ALTER TABLE rights COMMENT = 'System rights/permissions for RBAC';
 ALTER TABLE user_roles COMMENT = 'Many-to-many relationship between users and roles';
 ALTER TABLE role_rights COMMENT = 'Many-to-many relationship between roles and rights';
+
+-- Commit transaction
+COMMIT;

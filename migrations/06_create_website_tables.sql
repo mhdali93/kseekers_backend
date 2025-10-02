@@ -1,6 +1,9 @@
 -- Website Module Database Schema
 -- This migration creates tables for contact us and pricing plans
 
+-- Start transaction
+START TRANSACTION;
+
 -- Create contact_us table
 CREATE TABLE IF NOT EXISTS contact_us (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -45,3 +48,6 @@ INSERT INTO pricing_plans (title, sessions, duration, base_price, retention_disc
 ('Comprehensive Year', '96', '12 months', 20.00, 0.1500, 12, 'US, UK, IB, Cambridge, Montessori, Middle East', 
  JSON_ARRAY('Complete Year-long Syllabus', 'Extensive Topic Coverage', 'Deep Concept Understanding'), 0, 0, 1)
 ON DUPLICATE KEY UPDATE title = VALUES(title);
+
+-- Commit transaction
+COMMIT;

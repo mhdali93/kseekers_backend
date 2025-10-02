@@ -3,6 +3,9 @@
 -- Created: 2024-12-01T12:00:00
 -- Description: Remove redundant columns, add grid metadata table, and separate datatype fields
 
+-- Start transaction
+START TRANSACTION;
+
 -- Step 1: Create grid_metadata table
 CREATE TABLE grid_metadata (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,3 +66,6 @@ RENAME TABLE result_display_config_new TO result_display_config;
 
 -- Step 7: Verify the new structure
 -- This will be checked after migration runs
+
+-- Commit transaction
+COMMIT;
