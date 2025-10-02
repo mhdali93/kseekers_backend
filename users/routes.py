@@ -80,19 +80,20 @@ class UserRoutes:
                         search: Optional[str] = Query(None, description="Search term"),
                         is_active: Optional[bool] = Query(None, description="Filter by active status"),
                         role_id: Optional[int] = Query(None, description="Filter by role ID"),
-                        logger: str = Query(None, include_in_schema=False)):
+                        logger: str = Query(None, include_in_schema=False),
+                        token: str = None):
         """List users with pagination and filters"""
         try:
             users, total = self.controller.list_users(page, per_page, search, is_active, role_id)
             
-            user_responses = [UserResponse(**user.to_dict()) for user in users]
+            user_responses = [user.to_dict() for user in users]
             
-            return UserListResponse(
-                users=user_responses,
-                total=total,
-                page=page,
-                per_page=per_page
-            )
+            return {
+                "users": user_responses,
+                "total": total,
+                "page": page,
+                "per_page": per_page
+            }
         except Exception as e:
             logging.error(f"USER_ROUTES: Error listing users - error: {str(e)}")
             raise
@@ -104,11 +105,12 @@ class UserRoutes:
     )
     @jwt_auth_required
     async def create_user(self, request: Request, user_data: UserCreate,
-                         logger: str = Query(None, include_in_schema=False)):
+                         logger: str = Query(None, include_in_schema=False),
+                         token: str = None):
         """Create a new user (moved from auth/register)"""
         try:
             user = self.controller.create_user(user_data)
-            return UserResponse(**user.to_dict())
+            return user.to_dict()
         except HTTPException as e:
             logging.error(f"USER_ROUTES: User creation failed - status={e.status_code}, detail={e.detail}")
             raise
@@ -122,11 +124,14 @@ class UserRoutes:
     )
     @jwt_auth_required
     async def get_user(self, request: Request, user_id: int,
-                      logger: str = Query(None, include_in_schema=False)):
+                      logger: str = Query(None, include_in_schema=False),
+                      token: str = None):
         """Get user by ID"""
         try:
             user = self.controller.get_user(user_id)
-            return UserResponse(**user.to_dict())
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return user.to_dict()
         except HTTPException as e:
             logging.error(f"USER_ROUTES: User retrieval failed - status={e.status_code}, detail={e.detail}")
             raise
@@ -140,11 +145,12 @@ class UserRoutes:
     )
     @jwt_auth_required
     async def update_user(self, request: Request, user_data: UserUpdate,
-                         logger: str = Query(None, include_in_schema=False)):
+                         logger: str = Query(None, include_in_schema=False),
+                         token: str = None):
         """Update a user"""
         try:
             user = self.controller.update_user(user_data.user_id, user_data)
-            return UserResponse(**user.to_dict())
+            return user.to_dict()
         except HTTPException as e:
             logging.error(f"USER_ROUTES: User update failed - status={e.status_code}, detail={e.detail}")
             raise
@@ -160,36 +166,39 @@ class UserRoutes:
     async def get_user_rights(self, request: Request, user_id: int,
                              resource_type: Optional[str] = Query(None, description="Filter by resource type"),
                              module: Optional[str] = Query(None, description="Filter by module"),
-                             logger: str = Query(None, include_in_schema=False)):
+                             logger: str = Query(None, include_in_schema=False),
+                             token: str = None):
         """Get user rights (inherited through user's role) - moved from rbac/user-rights/{user_id}"""
         try:
             # First get the user to get username and role info
             user = self.controller.get_user(user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
             
             # Get user rights (inherited through role)
             rights = self.controller.get_user_rights(user_id, resource_type, module)
             
             right_responses = []
             for right in rights:
-                right_responses.append(RightResponse(
-                    id=right.id,
-                    name=right.name,
-                    display_name=right.display_name,
-                    description=right.description,
-                    resource_type=right.resource_type,
-                    resource_path=right.resource_path,
-                    http_method=right.http_method,
-                    module=right.module,
-                    is_active=right.is_active
-                ))
+                right_responses.append({
+                    "id": right.id,
+                    "name": right.name,
+                    "display_name": right.display_name,
+                    "description": right.description,
+                    "resource_type": right.resource_type,
+                    "resource_path": right.resource_path,
+                    "http_method": right.http_method,
+                    "module": getattr(right, 'module', 'default'),  # Handle missing module column
+                    "is_active": right.is_active
+                })
             
-            return UserRightsResponse(
-                user_id=user.id,
-                username=user.username,
-                role_id=user.role_id,
-                role_name=None,  # Could be populated if needed
-                rights=right_responses
-            )
+            return {
+                "user_id": user.id,
+                "username": user.username,
+                "role_id": user.role_id,
+                "role_name": None,  # Could be populated if needed
+                "rights": right_responses
+            }
         except HTTPException as e:
             logging.error(f"USER_ROUTES: User rights retrieval failed - status={e.status_code}, detail={e.detail}")
             raise
@@ -204,11 +213,12 @@ class UserRoutes:
     @jwt_auth_required
     async def check_user_api_access(self, request: Request, 
                                    access_request: UserApiAccessRequest,
-                                   logger: str = Query(None, include_in_schema=False)):
+                                   logger: str = Query(None, include_in_schema=False),
+                                   token: str = None):
         """Check user API access (moved from rbac)"""
         try:
             result = self.controller.check_user_api_access(access_request.user_id, access_request)
-            return UserApiAccessResponse(**result)
+            return result
         except HTTPException as e:
             logging.error(f"USER_ROUTES: API access check failed - status={e.status_code}, detail={e.detail}")
             raise

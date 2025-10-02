@@ -24,6 +24,7 @@ from auth.routes import AuthRoutes
 from display_config.routes import DisplayConfigRoutes
 from rbac.routes import RBACRoutes
 from users.routes import UserRoutes
+from website.routes import WebsiteRoutes
 
 # Exception handlers
 from middlerware.custom_exception_handler import HTTPExceptionHandler, RequestValidationExceptionHandler
@@ -76,6 +77,7 @@ auth_routes = AuthRoutes()
 display_config_routes = DisplayConfigRoutes()
 rbac_routes = RBACRoutes()
 user_routes = UserRoutes()
+website_routes = WebsiteRoutes()
 
 # Include routers
 app.include_router(health_routes.app, tags=["HEALTH CHECK"])
@@ -84,6 +86,7 @@ app.include_router(auth_routes.app)
 app.include_router(display_config_routes.app)
 app.include_router(rbac_routes.app)
 app.include_router(user_routes.app)
+app.include_router(website_routes.app)
 
 
 if __name__ == "__main__":

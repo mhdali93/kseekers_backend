@@ -154,7 +154,7 @@ class RBACRoutes:
     # 4. Right Management Endpoints
     @DecoratorUtils.create_endpoint(
         success_message="Right created successfully",
-        error_message=ExceptionMessage.fail_to_create.value,
+        error_message="Error creating right",
         success_status=HTTPStatus.created
     )
     @jwt_auth_required
@@ -162,16 +162,21 @@ class RBACRoutes:
                           token: str = Query(None, include_in_schema=False),
                           logger: str = Query(None, include_in_schema=False)):
         """Create a new right"""
-        return self.controller.create_right(
-            name=right_data.name,
-            display_name=right_data.display_name,
-            description=right_data.description,
-            resource_type=right_data.resource_type,
-            resource_path=right_data.resource_path,
-            http_method=right_data.http_method,
-            module=right_data.module,
-            is_active=right_data.is_active
-        )
+        try:
+            result = self.controller.create_right(
+                name=right_data.name,
+                display_name=right_data.display_name,
+                description=right_data.description,
+                resource_type=right_data.resource_type,
+                resource_path=right_data.resource_path,
+                http_method=right_data.http_method,
+                module=right_data.module
+            )
+            logging.info(f"RBAC_ROUTES: Right created - name={right_data.name}")
+            return result
+        except Exception as e:
+            logging.error(f"RBAC_ROUTES: Right creation failed - name={right_data.name}, error={str(e)}")
+            raise
     
     @DecoratorUtils.create_endpoint(
         success_message="Rights retrieved successfully",

@@ -62,3 +62,9 @@ expiry = int(os.getenv('jwt_expiry', 2 * 60 * 60)) # 2 hours Default
 logging_path = os.getenv('logging_path', 'logs/app.log')
 logging_file_size = int(os.getenv('logging_file_size', '10485760'))  # 10MB default
 logging_backup_count = int(os.getenv('logging_backup_count', '5'))
+
+# SMTP Email configuration
+smtp_host = os.getenv('smtp_host', 'smtp.gmail.com')
+smtp_username = os.getenv('smtp_username', '')
+smtp_password = os.getenv('smtp_password', '')
+smtp_port = int(os.getenv('smtp_port', '587'))
